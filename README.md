@@ -49,7 +49,7 @@ WebHID requires a secure context, so serve over `localhost` (a plain `file://` o
 python -m http.server 8000
 ```
 
-Then open **http://localhost:8000/q1config.html** in Edge/Chrome, click **Connect**, and
+Then open **<http://localhost:8000/q1config.html>** in Edge/Chrome, click **Connect**, and
 authorize the keyboard. Save/Load presets use browser download / file picker; the JSON
 format is identical to the CLI's, so files are interchangeable between the two.
 
@@ -59,3 +59,7 @@ A preset is a full snapshot of the runtime config (timing, feature flags, all 32
 tap-dance slots as keycode names, and indicator colors as hex) — human-readable and
 shareable. `presets/mine.json` is the maintainer's personal setup; it's just a regular
 preset (load it, edit it, or branch new ones with `save`).
+
+## Screenshot
+
+![screenshot](images/ss-1.png)
