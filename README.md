@@ -1,7 +1,7 @@
 # q1config
 
 Host-side configuration tools for a customized **Keychron Q1 Pro** (ANSI knob) running a
-QMK `me` keymap that exposes a raw-HID runtime-config interface (command byte `0xAC`).
+QMK `rtcfg` keymap that exposes a raw-HID runtime-config interface (command byte `0xAC`).
 Change tap dance, tapping term, Caps Word, Auto Shift, key assignments, and RGB state
 indicators **at runtime** — no recompile/reflash — and save/load configurations as files.
 
@@ -11,7 +11,7 @@ Two front-ends over the same protocol:
 - **`q1config.html`** — a single-file browser GUI (WebHID; Chrome/Edge) with a graphical
   keyboard, key remapping, tap-dance editor, sliders/toggles, color pickers, and presets.
 
-> Companion firmware lives in the QMK tree (`keychron/q1_pro/ansi_knob` keymap `me`,
+> Companion firmware lives in the QMK tree (`keychron/q1_pro/ansi_knob` keymap `rtcfg`,
 > branch `raw-hid-config`). This app only does anything once that firmware is flashed.
 > The wire format is documented in [PROTOCOL.md](PROTOCOL.md).
 

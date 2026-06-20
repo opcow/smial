@@ -1,7 +1,7 @@
 # Wire protocol
 
 The firmware and this app must agree on these definitions. The authoritative source is the
-QMK keymap (`keychron/q1_pro/ansi_knob/keymaps/me/keymap.c`); this file mirrors it so the
+QMK keymap (`keychron/q1_pro/ansi_knob/keymaps/rtcfg/keymap.c`); this file mirrors it so the
 two repos stay in sync. Update both together when changing the protocol.
 
 ## Transport
