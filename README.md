@@ -1,5 +1,7 @@
 # q1config
 
+Repository: <https://github.com/opcow/q1config>
+
 Host-side configuration tools for a customized **Keychron Q1 Pro** (ANSI knob) running a
 QMK `rtcfg` keymap that exposes a raw-HID runtime-config interface (command byte `0xAC`).
 Change tap dance, tapping term, Caps Word, Auto Shift, key assignments, and RGB state
