@@ -200,12 +200,12 @@ static void drawTapDance() {
 
     int n = g_showAllTd ? TD_SLOT_COUNT : 8;
     if (ImGui::BeginTable("td", 6,
-            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchSame)) {
+            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("#",         ImGuiTableColumnFlags_WidthFixed,   30);
-        ImGui::TableSetupColumn("Name",      ImGuiTableColumnFlags_WidthFixed,  100);
-        ImGui::TableSetupColumn("Tap",       ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Secondary", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Mode",      ImGuiTableColumnFlags_WidthFixed,   80);
+        ImGui::TableSetupColumn("Name",      ImGuiTableColumnFlags_WidthFixed,   60);
+        ImGui::TableSetupColumn("Tap",       ImGuiTableColumnFlags_WidthFixed,  170);
+        ImGui::TableSetupColumn("Secondary", ImGuiTableColumnFlags_WidthFixed,  170);
+        ImGui::TableSetupColumn("Mode",      ImGuiTableColumnFlags_WidthFixed,  100);
         ImGui::TableSetupColumn("Enabled",   ImGuiTableColumnFlags_WidthFixed,   60);
         ImGui::TableHeadersRow();
 
@@ -266,8 +266,11 @@ static void drawFeatures() {
         {"Caps Word timeout",  &g_feat.cwtimeout,   0,10000, 2, false},
     };
 
-    ImGui::BeginGroup();
-    for (auto& p : params) {
+    float checkboxX = ImGui::GetCursorPosX() + 200 + ImGui::GetStyle().ItemSpacing.x + 72 + ImGui::GetStyle().ItemSpacing.x + 40;
+
+    // Draw each timing parameter with its corresponding checkbox on the right
+    for (int j = 0; j < 4; j++) {
+        auto& p = params[j];
         ImGui::PushID(p.label);
         ImGui::TextUnformatted(p.label);
         int v = (int)*p.val;
@@ -283,21 +286,28 @@ static void drawFeatures() {
             catch (...) {}
         }
         ImGui::PopID();
-    }
-    ImGui::EndGroup();
 
-    ImGui::SameLine(0, 40);
-
-    ImGui::BeginGroup();
-    for (int i = 0; i < 5; i++) {
-        bool on = !!(g_feat.flags & (1 << i));
-        if (ImGui::Checkbox(FLAG_NAMES[i], &on)) {
-            if (on) g_feat.flags |=  (uint16_t)(1 << i);
-            else    g_feat.flags &= ~(uint16_t)(1 << i);
-            try { setFlag(g_dev, i, on); } catch (...) {}
+        // Checkbox on the right (only for first 4 flags)
+        if (j < 4) {
+            ImGui::SameLine(checkboxX);
+            bool on = !!(g_feat.flags & (1 << j));
+            if (ImGui::Checkbox(FLAG_NAMES[j], &on)) {
+                if (on) g_feat.flags |=  (uint16_t)(1 << j);
+                else    g_feat.flags &= ~(uint16_t)(1 << j);
+                try { setFlag(g_dev, j, on); } catch (...) {}
+            }
         }
     }
-    ImGui::EndGroup();
+
+    // Fifth checkbox (no corresponding timing parameter)
+    ImGui::NewLine();
+    ImGui::SetCursorPosX(checkboxX);
+    bool on = !!(g_feat.flags & (1 << 4));
+    if (ImGui::Checkbox(FLAG_NAMES[4], &on)) {
+        if (on) g_feat.flags |=  (uint16_t)(1 << 4);
+        else    g_feat.flags &= ~(uint16_t)(1 << 4);
+        try { setFlag(g_dev, 4, on); } catch (...) {}
+    }
 }
 
 // ── indicators panel ──────────────────────────────────────────────────────────
@@ -371,7 +381,82 @@ static void drawPresets() {
     if (ImGui::Button("Reset keymap")) {
         try { viaKmReset(g_dev); loadKeymap(); } catch (...) {}
     }
-    ImGui::TextDisabled("Save/Load .json presets — same files work with q1config.py.");
+}
+
+// ── styling ───────────────────────────────────────────────────────────────────
+static void setupStyle() {
+    ImGui::StyleColorsDark();
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding    = 10.0f;
+    style.ChildRounding     = 10.0f;
+    style.FrameRounding     = 8.0f;
+    style.GrabRounding      = 8.0f;
+    style.TabRounding       = 8.0f;
+    style.ScrollbarRounding = 10.0f;
+    style.PopupRounding     = 8.0f;
+    style.WindowBorderSize  = 1.0f;
+    style.ChildBorderSize   = 1.0f;
+    style.FrameBorderSize   = 1.0f;
+    style.FramePadding      = ImVec2(10.0f, 7.0f);
+    style.ItemSpacing       = ImVec2(10.0f, 8.0f);
+    style.ItemInnerSpacing  = ImVec2(8.0f, 6.0f);
+    style.WindowPadding     = ImVec2(12.0f, 12.0f);
+    style.IndentSpacing     = 20.0f;
+
+    ImVec4* colors = style.Colors;
+    colors[ImGuiCol_Text]                 = ImVec4(0.92f, 0.93f, 0.95f, 1.00f);
+    colors[ImGuiCol_TextDisabled]         = ImVec4(0.56f, 0.61f, 0.68f, 1.00f);
+    colors[ImGuiCol_WindowBg]             = ImVec4(0.08f, 0.10f, 0.13f, 1.00f);
+    colors[ImGuiCol_ChildBg]              = ImVec4(0.10f, 0.12f, 0.16f, 1.00f);
+    colors[ImGuiCol_PopupBg]              = ImVec4(0.10f, 0.12f, 0.16f, 0.98f);
+    colors[ImGuiCol_Border]               = ImVec4(0.20f, 0.24f, 0.30f, 1.00f);
+    colors[ImGuiCol_BorderShadow]         = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    colors[ImGuiCol_FrameBg]              = ImVec4(0.12f, 0.15f, 0.20f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered]       = ImVec4(0.16f, 0.22f, 0.30f, 1.00f);
+    colors[ImGuiCol_FrameBgActive]        = ImVec4(0.20f, 0.28f, 0.38f, 1.00f);
+    colors[ImGuiCol_TitleBg]              = ImVec4(0.09f, 0.11f, 0.15f, 1.00f);
+    colors[ImGuiCol_TitleBgActive]        = ImVec4(0.11f, 0.15f, 0.20f, 1.00f);
+    colors[ImGuiCol_MenuBarBg]            = ImVec4(0.10f, 0.12f, 0.16f, 1.00f);
+    colors[ImGuiCol_ScrollbarBg]          = ImVec4(0.06f, 0.07f, 0.10f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrab]        = ImVec4(0.25f, 0.31f, 0.39f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.32f, 0.40f, 0.50f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabActive]  = ImVec4(0.38f, 0.48f, 0.60f, 1.00f);
+    colors[ImGuiCol_CheckMark]            = ImVec4(0.42f, 0.76f, 0.96f, 1.00f);
+    colors[ImGuiCol_SliderGrab]           = ImVec4(0.42f, 0.76f, 0.96f, 1.00f);
+    colors[ImGuiCol_SliderGrabActive]     = ImVec4(0.60f, 0.86f, 1.00f, 1.00f);
+    colors[ImGuiCol_Button]               = ImVec4(0.17f, 0.22f, 0.29f, 1.00f);
+    colors[ImGuiCol_ButtonHovered]        = ImVec4(0.24f, 0.31f, 0.40f, 1.00f);
+    colors[ImGuiCol_ButtonActive]         = ImVec4(0.30f, 0.40f, 0.51f, 1.00f);
+    colors[ImGuiCol_Header]               = ImVec4(0.16f, 0.23f, 0.32f, 0.90f);
+    colors[ImGuiCol_HeaderHovered]        = ImVec4(0.23f, 0.33f, 0.44f, 0.95f);
+    colors[ImGuiCol_HeaderActive]         = ImVec4(0.28f, 0.40f, 0.54f, 1.00f);
+    colors[ImGuiCol_Separator]            = ImVec4(0.22f, 0.26f, 0.33f, 1.00f);
+    colors[ImGuiCol_SeparatorHovered]     = ImVec4(0.35f, 0.58f, 0.88f, 1.00f);
+    colors[ImGuiCol_SeparatorActive]      = ImVec4(0.42f, 0.70f, 1.00f, 1.00f);
+    colors[ImGuiCol_ResizeGrip]           = ImVec4(0.27f, 0.34f, 0.43f, 0.50f);
+    colors[ImGuiCol_ResizeGripHovered]    = ImVec4(0.35f, 0.58f, 0.88f, 0.70f);
+    colors[ImGuiCol_ResizeGripActive]     = ImVec4(0.42f, 0.70f, 1.00f, 0.95f);
+    colors[ImGuiCol_Tab]                  = ImVec4(0.12f, 0.16f, 0.22f, 1.00f);
+    colors[ImGuiCol_TabHovered]           = ImVec4(0.20f, 0.29f, 0.40f, 1.00f);
+    colors[ImGuiCol_TabActive]            = ImVec4(0.17f, 0.24f, 0.33f, 1.00f);
+    colors[ImGuiCol_TabUnfocused]         = ImVec4(0.09f, 0.12f, 0.17f, 1.00f);
+    colors[ImGuiCol_TabUnfocusedActive]   = ImVec4(0.13f, 0.18f, 0.25f, 1.00f);
+    colors[ImGuiCol_PlotLines]            = ImVec4(0.70f, 0.74f, 0.82f, 1.00f);
+    colors[ImGuiCol_PlotLinesHovered]     = ImVec4(0.98f, 0.65f, 0.24f, 1.00f);
+    colors[ImGuiCol_PlotHistogram]        = ImVec4(0.36f, 0.72f, 0.94f, 1.00f);
+    colors[ImGuiCol_PlotHistogramHovered] = ImVec4(0.98f, 0.65f, 0.24f, 1.00f);
+    colors[ImGuiCol_TextSelectedBg]       = ImVec4(0.29f, 0.50f, 0.79f, 0.45f);
+    colors[ImGuiCol_ModalWindowDimBg]     = ImVec4(0.04f, 0.05f, 0.08f, 0.74f);
+}
+
+static void pushPrimaryButtonStyle() {
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.20f, 0.55f, 0.90f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.30f, 0.66f, 1.00f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.14f, 0.44f, 0.78f, 1.0f));
+}
+
+static void popPrimaryButtonStyle() {
+    ImGui::PopStyleColor(3);
 }
 
 // ── main entry ────────────────────────────────────────────────────────────────
@@ -383,7 +468,7 @@ int gui_main() {
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
-    GLFWwindow* win = glfwCreateWindow(800, 960, "Keychron Q1 Pro Config", nullptr, nullptr);
+    GLFWwindow* win = glfwCreateWindow(800, 600, "Keychron Q1 Pro Config", nullptr, nullptr);
     if (!win) { glfwTerminate(); return 1; }
     glfwMakeContextCurrent(win);
     glfwSwapInterval(1);
@@ -392,7 +477,7 @@ int gui_main() {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
-    ImGui::StyleColorsDark();
+    setupStyle();
     ImFontConfig fontCfg;
     fontCfg.FontDataOwnedByAtlas = false;
     io.Fonts->AddFontFromMemoryTTF(
@@ -444,6 +529,7 @@ int gui_main() {
 
         // connection bar
         if (!g_connected) {
+            pushPrimaryButtonStyle();
             if (ImGui::Button("Connect")) {
                 if (g_dev.open()) {
                     g_connected = true;
@@ -454,6 +540,7 @@ int gui_main() {
                     snprintf(g_statusMsg, sizeof(g_statusMsg), "Device not found (VID 3434 PID 0610)");
                 }
             }
+            popPrimaryButtonStyle();
         } else {
             if (ImGui::Button("Reconnect")) {
                 g_dev.close(); g_connected = false;
@@ -470,16 +557,52 @@ int gui_main() {
         ImGui::Separator();
 
         if (g_connected) {
-            ImGui::BeginChild("##scroll");
-            drawKeyboard();
-            // disable remaining panels while identifying to prevent concurrent HID calls
+            // Reserve space at the bottom for the always-visible Presets section
+            float footerH = ImGui::GetTextLineHeightWithSpacing()   // SeparatorText
+                          + ImGui::GetFrameHeightWithSpacing()      // button row
+                          + ImGui::GetStyle().ItemSpacing.y * 2;
+            ImGui::BeginChild("##tabsregion", ImVec2(0, -footerH));
+            if (ImGui::BeginTabBar("##tabs", ImGuiTabBarFlags_None)) {
+                if (ImGui::BeginTabItem("Keyboard")) {
+                    ImGui::BeginChild("##tab_kb");
+                    drawKeyboard();
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                // remaining tabs disabled while identifying to prevent concurrent HID calls
+                if (ImGui::BeginTabItem("Tap Dance")) {
+                    ImGui::BeginChild("##tab_td");
+                    ImGui::BeginDisabled(g_identifying);
+                    drawTapDance();
+                    ImGui::EndDisabled();
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Timing")) {
+                    ImGui::BeginChild("##tab_feat");
+                    ImGui::BeginDisabled(g_identifying);
+                    drawFeatures();
+                    ImGui::EndDisabled();
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Indicators")) {
+                    ImGui::BeginChild("##tab_ind");
+                    ImGui::BeginDisabled(g_identifying);
+                    drawIndicators();
+                    ImGui::EndDisabled();
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
+            }
+            ImGui::EndChild();
+
+            // Presets: always visible at the bottom, not a tab
+            ImGui::Separator();
             ImGui::BeginDisabled(g_identifying);
-            drawTapDance();
-            drawFeatures();
-            drawIndicators();
             drawPresets();
             ImGui::EndDisabled();
-            ImGui::EndChild();
         }
 
         ImGui::End();
@@ -488,7 +611,7 @@ int gui_main() {
         int w, h;
         glfwGetFramebufferSize(win, &w, &h);
         glViewport(0, 0, w, h);
-        glClearColor(0.12f, 0.12f, 0.14f, 1.0f);
+        glClearColor(0.08f, 0.10f, 0.13f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(win);
