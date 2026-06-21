@@ -67,24 +67,56 @@ static void loadAll() {
     loadKeymap();
 }
 
-// Keycode combo — returns true when value changed
-static bool KcCombo(const char* id, uint16_t& kc) {
-    auto& entries = allKeycodes();
-    std::string preview = nameOf(kc);
+// Tabbed category grid — call inside an open popup. Sets kc and returns true
+// (and closes the popup) when a keycode button is clicked.
+static bool KcPickerBody(uint16_t& kc) {
     bool changed = false;
-    if (ImGui::BeginCombo(id, preview.c_str(), ImGuiComboFlags_HeightLarge)) {
-        ImGuiListClipper clip;
-        clip.Begin((int)entries.size());
-        while (clip.Step()) {
-            for (int i = clip.DisplayStart; i < clip.DisplayEnd; i++) {
-                bool sel = entries[i].second == kc;
-                if (ImGui::Selectable(entries[i].first.c_str(), sel)) {
-                    kc = entries[i].second; changed = true;
+    if (ImGui::BeginTabBar("##cats")) {
+        for (const auto& cat : keycodeCategories()) {
+            if (ImGui::BeginTabItem(cat.name.c_str())) {
+                ImGui::BeginChild("##grid", ImVec2(0, 300));
+                float right   = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+                float spacing = ImGui::GetStyle().ItemSpacing.x;
+                float padX    = ImGui::GetStyle().FramePadding.x * 2;
+                for (size_t i = 0; i < cat.entries.size(); i++) {
+                    bool sel = cat.entries[i].second == kc;
+                    if (sel) ImGui::PushStyleColor(ImGuiCol_Button,
+                                 ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+                    ImGui::PushID((int)i);
+                    if (ImGui::Button(cat.entries[i].first.c_str())) {
+                        kc = cat.entries[i].second; changed = true;
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::PopID();
+                    if (sel) ImGui::PopStyleColor();
+                    // Wrap manually: stay on the row only if the next button fits.
+                    if (i + 1 < cat.entries.size()) {
+                        float nextW = ImGui::CalcTextSize(cat.entries[i + 1].first.c_str()).x + padX;
+                        if (ImGui::GetItemRectMax().x + spacing + nextW < right)
+                            ImGui::SameLine();
+                    }
                 }
-                if (sel) ImGui::SetItemDefaultFocus();
+                ImGui::EndChild();
+                ImGui::EndTabItem();
             }
         }
-        ImGui::EndCombo();
+        ImGui::EndTabBar();
+    }
+    return changed;
+}
+
+// Inline keycode picker: a button showing the current name that opens the
+// tabbed popup. Returns true when a new code is chosen.
+static bool KcPicker(const char* id, uint16_t& kc) {
+    bool changed = false;
+    float w = ImGui::CalcItemWidth();
+    std::string label = nameOf(kc) + "##btn" + id;
+    if (ImGui::Button(label.c_str(), ImVec2(w, 0)))
+        ImGui::OpenPopup(id);
+    ImGui::SetNextWindowSize(ImVec2(540, 380), ImGuiCond_Appearing);
+    if (ImGui::BeginPopup(id)) {
+        changed = KcPickerBody(kc);
+        ImGui::EndPopup();
     }
     return changed;
 }
@@ -178,21 +210,18 @@ static void drawKeyboard() {
     ImGui::EndChild();
     ImGui::PopStyleVar();
 
-    // key editor popup
+    // key editor popup — pick a keycode from the tabbed grid; applies on select
     if (g_editorOpen) { ImGui::OpenPopup("Key Editor"); g_editorOpen = false; }
+    ImGui::SetNextWindowSize(ImVec2(540, 380), ImGuiCond_Appearing);
     if (ImGui::BeginPopup("Key Editor")) {
-        ImGui::Text("R%d C%d  (layer %d)", g_editorRow, g_editorCol, g_layer);
-        ImGui::SetNextItemWidth(220);
-        KcCombo("##kcedit", g_editorKc);
-        if (ImGui::Button("Set")) {
+        ImGui::Text("R%d C%d  (layer %d)  —  %s",
+                    g_editorRow, g_editorCol, g_layer, nameOf(g_editorKc).c_str());
+        if (KcPickerBody(g_editorKc)) {
             try {
                 viaSet(g_dev, g_layer, g_editorRow, g_editorCol, g_editorKc);
                 g_keymap[g_editorRow][g_editorCol] = g_editorKc;
             } catch (...) {}
-            ImGui::CloseCurrentPopup();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
 }
@@ -226,12 +255,12 @@ static void drawTapDance() {
 
             ImGui::TableSetColumnIndex(2);
             ImGui::SetNextItemWidth(-1);
-            if (KcCombo("##tap", g_td[i].tap))
+            if (KcPicker("##tap", g_td[i].tap))
                 try { setTdKc(g_dev, i, g_td[i].tap, g_td[i].sec); } catch (...) {}
 
             ImGui::TableSetColumnIndex(3);
             ImGui::SetNextItemWidth(-1);
-            if (KcCombo("##sec", g_td[i].sec))
+            if (KcPicker("##sec", g_td[i].sec))
                 try { setTdKc(g_dev, i, g_td[i].tap, g_td[i].sec); } catch (...) {}
 
             ImGui::TableSetColumnIndex(4);

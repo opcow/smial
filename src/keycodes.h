@@ -7,3 +7,10 @@
 std::string nameOf(uint16_t code);
 uint16_t    kcParse(const std::string& s);  // throws std::runtime_error on unknown
 const std::vector<std::pair<std::string, uint16_t>>& allKeycodes();
+
+// Keycodes grouped into VIA-style categories (Basic, Media, Layers, ...).
+struct KcCategory {
+    std::string name;
+    std::vector<std::pair<std::string, uint16_t>> entries;
+};
+const std::vector<KcCategory>& keycodeCategories();

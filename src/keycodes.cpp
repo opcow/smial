@@ -132,3 +132,31 @@ const std::vector<std::pair<std::string, uint16_t>>& allKeycodes() {
     buildTables();
     return ENTRIES;
 }
+
+// VIA-style category derived from a keycode's value range. First match wins.
+static const char* categoryOf(uint16_t c) {
+    if (c == 0x00 || c == 0x01 || c == 0x7C73 || c == 0x7C59 ||
+        (c >= 0x7C10 && c <= 0x7C15) || c == 0x7013) return "Special";
+    if (c <= 0x73 || (c >= 0xE0 && c <= 0xE7) ||
+        (c >= 0x0200 && c <= 0x02FF)) return "Basic";
+    if (c >= 0xA5 && c <= 0xC2) return "Media";
+    if (c >= 0x5200 && c <= 0x52FF) return "Layers";
+    if (c >= 0x7820 && c <= 0x782A) return "Lighting";
+    if ((c >= 0x5700 && c <= 0x57FF) || (c >= 0x7E00 && c <= 0x7E0E)) return "Custom";
+    return "Special";
+}
+
+const std::vector<KcCategory>& keycodeCategories() {
+    static std::vector<KcCategory> CATS;
+    if (!CATS.empty()) return CATS;
+    buildTables();
+    // Fixed tab order; only non-empty categories are kept.
+    const char* order[] = {"Basic", "Media", "Layers", "Lighting", "Special", "Custom"};
+    for (const char* name : order) {
+        KcCategory cat{name, {}};
+        for (auto& e : ENTRIES)
+            if (std::string(categoryOf(e.second)) == name) cat.entries.push_back(e);
+        if (!cat.entries.empty()) CATS.push_back(std::move(cat));
+    }
+    return CATS;
+}
