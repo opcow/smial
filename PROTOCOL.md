@@ -39,8 +39,8 @@ All multi-byte scalars are **little-endian**.
 
 **Indicators (idx):** 0 Caps Lock, 1 Caps Word, 2 WIN_FN layer.
 
-**Tap-dance slots:** 64 total (0–7 named, 8–63 generic). The keycode that triggers slot *n*
-is `TD(n) = 0x5700 | n`.
+**Tap-dance slots:** 64 total, named `TD0`–`TD63` (the name is the slot index). Slots 0–7 ship
+with default keycodes; 8–63 start blank. The keycode that triggers slot *n* is `TD(n) = 0x5700 | n`.
 
 ## VIA dynamic-keymap commands (key remapping)
 

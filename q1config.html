@@ -152,8 +152,8 @@ const LAYOUT=[
  [5,0,0,5.25,1.25],[5,1,1.25,5.25,1.25],[5,2,2.5,5.25,1.25],[5,6,3.75,5.25,6.25],[5,10,10,5.25,1],
  [5,11,11,5.25,1],[5,12,12,5.25,1],[5,13,13.25,5.5,1],[5,14,14.25,5.5,1],[5,15,15.25,5.5,1],
 ];
-const TD_NAMES=["NO_CAPS","HOME_END","ESC_CW","SCLN_CLN","F_PSCR","F_SCRL","F_PAUS","F_NUM"];
-for(let i=8;i<64;i++) TD_NAMES.push("TD"+i);
+// Slots are named TD0..TD63 so a slot's name is its index (matches the firmware).
+const TD_NAMES=[]; for(let i=0;i<64;i++) TD_NAMES.push("TD"+i);
 
 //// ---- transport ----
 const CMD=0xAC;

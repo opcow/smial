@@ -48,9 +48,9 @@ Commands:
 Keycodes may be names (A, F12, SCLN, COLN, HOME, ENT, CW_TOGG, LOCK, AS_TOGG...),
 shifted form S(SCLN), a tap-dance slot TD3 / TD(3), or raw numbers (0x0233 / 563).
 Layers: 0 MAC_BASE  1 MAC_FN  2 WIN_BASE  3 WIN_FN. Matrix is 6 rows x 16 cols.
-Tap dance slot indices:
-    0 NO_CAPS  1 HOME_END  2 ESC_CW  3 SCLN_CLN
-    4 F_PSCR   5 F_SCRL    6 F_PAUS  7 F_NUM   (8..31 generic)
+Tap dance slots are named TD0..TD63 (the name is the slot index). Slots 0-7 ship
+with default keycodes (TD0 caps, TD1 home/end, TD2 esc, TD3 ;/:, TD4-7 F9-F12);
+8-63 start blank.
 """
 import sys
 import json
@@ -79,9 +79,8 @@ VIA_GET_KEYCODE, VIA_SET_KEYCODE, VIA_KEYMAP_RESET = 0x04, 0x05, 0x06
 QK_TAP_DANCE = 0x5700
 ROWS, COLS, LAYERS = 6, 16, 4
 
-TD_NAMES = ["NO_CAPS", "HOME_END", "ESC_CW", "SCLN_CLN",
-            "F_PSCR", "F_SCRL", "F_PAUS", "F_NUM"]
-TD_NAMES += [f"TD{i}" for i in range(len(TD_NAMES), TD_SLOT_COUNT)]  # generic slots 8..63
+# Slots are named TD0..TD63 so a slot's name is its index (matches the firmware).
+TD_NAMES = [f"TD{i}" for i in range(TD_SLOT_COUNT)]
 
 # --- keycode name -> value table (QMK basic keycodes / HID usage IDs) ---
 NAMES = {"NO": 0x00, "TRNS": 0x01}
@@ -391,7 +390,7 @@ def main():
     elif op == "assign":
         l, rw, c, slot = int(a[1]), int(a[2]), int(a[3]), int(a[4])
         via_set_keycode(h, l, rw, c, QK_TAP_DANCE | slot)
-        print(f"L{l} R{rw} C{c} -> TD{slot} ({TD_NAMES[slot]})")
+        print(f"L{l} R{rw} C{c} -> TD{slot}")
     elif op == "unassign":
         l, rw, c, code = int(a[1]), int(a[2]), int(a[3]), kc(a[4])
         via_set_keycode(h, l, rw, c, code)
