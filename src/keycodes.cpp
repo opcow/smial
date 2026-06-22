@@ -40,6 +40,7 @@ static void buildTables() {
     KC["CW_TOGG"]=0x7C73; KC["QK_LOCK"]=0x7C59;
     KC["AS_DOWN"]=0x7C10; KC["AS_UP"]=0x7C11; KC["AS_RPT"]=0x7C12;
     KC["AS_ON"]=0x7C13;   KC["AS_OFF"]=0x7C14; KC["AS_TOGG"]=0x7C15;
+    KC["QK_BOOT"]=0x7C00;  // enter DFU bootloader (e.g. as a combo output)
 
     // Modifiers
     KC["LCTL"]=0xE0; KC["LSFT"]=0xE1; KC["LALT"]=0xE2; KC["LGUI"]=0xE3;
@@ -223,9 +224,13 @@ const std::vector<std::pair<std::string, uint16_t>>& allKeycodes() {
 // VIA-style category derived from a keycode's value range. First match wins.
 static const char* categoryOf(uint16_t c) {
     if (c == 0x00 || c == 0x01 || c == 0x7C73 || c == 0x7C59 ||
-        (c >= 0x7C10 && c <= 0x7C15) || c == 0x7013) return "Special";
-    if (c <= 0x73 || (c >= 0xE0 && c <= 0xE7) ||
-        (c >= 0x0200 && c <= 0x02FF)) return "Basic";
+        (c >= 0x7C10 && c <= 0x7C15) || c == 0x7C00 || c == 0x7013) return "Special";
+    if (c >= 0x04 && c <= 0x1D) return "Alpha";                            // A-Z
+    if (c >= 0xE0 && c <= 0xE7) return "Mods";                             // LCTL..RGUI
+    if ((c >= 0x3A && c <= 0x45) || (c >= 0x68 && c <= 0x73)) return "Fn"; // F1-F24
+    if ((c >= 0x1E && c <= 0x27) || (c >= 0x2D && c <= 0x38) ||
+        (c >= 0x0200 && c <= 0x02FF)) return "Symbols";                    // digits, punct, shifted
+    if (c <= 0x53) return "Nav";                                            // ENT/ESC/TAB/SPC/CAPS/arrows/…
     if (c >= 0xA5 && c <= 0xC2) return "Media";
     if (c >= 0x5200 && c <= 0x52FF) return "Layers";
     if (c >= 0x7820 && c <= 0x782A) return "Lighting";
@@ -258,14 +263,31 @@ const std::vector<KcCategory>& keycodeCategories() {
     static std::vector<KcCategory> CATS;
     if (!CATS.empty()) return CATS;
     buildTables();
-    // Fixed tab order; only non-empty categories are kept.
-    const char* order[] = {"Basic", "Media", "Layers", "Lighting", "Special", "Custom"};
+    const char* order[] = {"Alpha","Fn","Symbols","Nav","Mods","Media","Layers","Lighting","Special","Custom"};
     for (const char* name : order) {
         KcCategory cat{name, {}};
         for (auto& e : ENTRIES)
             if (std::string(categoryOf(e.second)) == name) cat.entries.push_back(e);
-        std::sort(cat.entries.begin(), cat.entries.end(),
-                  [](const auto& a, const auto& b) { return naturalLess(a.first, b.first); });
+        std::string catName = name;
+        if (catName == "Mods") {
+            // Fixed left-then-right, Ctl→Sft→Alt→Gui order
+            std::sort(cat.entries.begin(), cat.entries.end(), [](const auto& a, const auto& b) {
+                static const char* ord[] = {"LCTL","LSFT","LALT","LGUI","RCTL","RSFT","RALT","RGUI"};
+                int ai = 8, bi = 8;
+                for (int i = 0; i < 8; i++) {
+                    if (a.first == ord[i]) ai = i;
+                    if (b.first == ord[i]) bi = i;
+                }
+                return ai < bi;
+            });
+        } else if (catName == "Fn" || catName == "Nav") {
+            // By code value → natural keyboard order (F1 before F2, ENT/ESC/… before arrows)
+            std::sort(cat.entries.begin(), cat.entries.end(),
+                      [](const auto& a, const auto& b) { return a.second < b.second; });
+        } else {
+            std::sort(cat.entries.begin(), cat.entries.end(),
+                      [](const auto& a, const auto& b) { return naturalLess(a.first, b.first); });
+        }
         if (!cat.entries.empty()) CATS.push_back(std::move(cat));
     }
     return CATS;

@@ -1,3 +1,9 @@
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX  // keep std::min/std::max usable (windows.h would macro them)
+#endif
+#include <windows.h>
+#endif
 #include "gui.h"
 #include "hid.h"
 #include "keycodes.h"
@@ -18,6 +24,19 @@
 // ── constants ─────────────────────────────────────────────────────────────────
 static constexpr float KEY_U   = 44.0f;
 static constexpr float KEY_GAP = 3.0f;
+
+// Highlight for a "selected" button (active layer, current keycode) — a bright
+// blue that stands out against the neutral buttons.
+static const ImVec4 SELECTED_BTN = ImVec4(0.46f, 0.74f, 1.00f, 1.00f);
+
+// Blue accent for command/action buttons (Connect, Save, Reset, layer, …).
+// Keycode-field and picker-grid buttons keep the neutral theme colors.
+static void pushPrimaryButtonStyle() {
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.20f, 0.55f, 0.90f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.30f, 0.66f, 1.00f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.14f, 0.44f, 0.78f, 1.0f));
+}
+static void popPrimaryButtonStyle() { ImGui::PopStyleColor(3); }
 
 static const char* LAYER_NAMES[] = {"0 MAC_BASE","1 MAC_FN","2 WIN_BASE","3 WIN_FN"};
 // Slots are named TD0..TDn so a slot's name is its index (matches the firmware).
@@ -102,8 +121,7 @@ static bool KcPickerBody(uint16_t& kc) {
                 float padX    = ImGui::GetStyle().FramePadding.x * 2;
                 for (size_t i = 0; i < vis.size(); i++) {
                     bool sel = vis[i]->second == kc;
-                    if (sel) ImGui::PushStyleColor(ImGuiCol_Button,
-                                 ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+                    if (sel) ImGui::PushStyleColor(ImGuiCol_Button, SELECTED_BTN);
                     ImGui::PushID((int)i);
                     if (ImGui::Button(vis[i]->first.c_str())) {
                         kc = vis[i]->second; changed = true;
@@ -141,6 +159,8 @@ static bool KcPicker(const char* id, uint16_t& kc) {
     std::string label = nameOf(kc) + "##btn" + id;
     if (ImGui::Button(label.c_str(), ImVec2(w, 0)))
         ImGui::OpenPopup(id);
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(540, 380), ImGuiCond_Appearing);
     if (ImGui::BeginPopup(id)) {
         changed = KcPickerBody(kc);
@@ -192,10 +212,12 @@ static bool KcBuilder(uint16_t& kc) {
     ImGui::Separator();
     ImGui::Text("Result: %s", nameOf(result).c_str());
     bool applied = false;
+    pushPrimaryButtonStyle();
     if (ImGui::Button("Use this keycode")) {
         kc = result; applied = true;
         ImGui::CloseCurrentPopup();
     }
+    popPrimaryButtonStyle();
     return applied;
 }
 
@@ -207,15 +229,18 @@ static void drawKeyboard() {
     for (int i = 0; i < 4; i++) {
         if (i > 0) ImGui::SameLine();
         bool on = (g_layer == i);
-        if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+        pushPrimaryButtonStyle();
+        if (on) ImGui::PushStyleColor(ImGuiCol_Button, SELECTED_BTN);
         if (ImGui::SmallButton(LAYER_NAMES[i])) {
             g_layer = i;
             try { loadKeymap(); } catch (...) {}
         }
         if (on) ImGui::PopStyleColor();
+        popPrimaryButtonStyle();
     }
 
     ImGui::SameLine(0, 20);
+    pushPrimaryButtonStyle();
     if (g_identifying) {
         ImGui::TextDisabled("Press a key on the keyboard...");
         ImGui::SameLine();
@@ -229,6 +254,7 @@ static void drawKeyboard() {
             } catch (...) {}
         }
     }
+    popPrimaryButtonStyle();
 
     // Scale key unit to fill available width, leaving an equal margin on each side.
     // The child gets zero window padding so the margin is controlled here only.
@@ -238,7 +264,7 @@ static void drawKeyboard() {
     float canvasW = availW;
     float canvasH = KB_H * ku + 2 * MARGIN;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    if (ImGui::BeginChild("##kb", {canvasW, canvasH}, ImGuiChildFlags_Border,
+    if (ImGui::BeginChild("##kb", {canvasW, canvasH}, ImGuiChildFlags_Borders,
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
         ImVec2 orig = ImGui::GetCursorScreenPos();
         orig.x += MARGIN; orig.y += MARGIN;
@@ -290,7 +316,11 @@ static void drawKeyboard() {
 
     // key editor popup — pick a keycode from the tabbed grid; applies on select
     if (g_editorOpen) { ImGui::OpenPopup("Key Editor"); g_editorOpen = false; }
-    ImGui::SetNextWindowSize(ImVec2(540, 380), ImGuiCond_Appearing);
+    {
+        ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(540, 380), ImGuiCond_Appearing);
+    }
     if (ImGui::BeginPopup("Key Editor")) {
         ImGui::Text("R%d C%d  (layer %d)  —  %s",
                     g_editorRow, g_editorCol, g_layer, nameOf(g_editorKc).c_str());
@@ -401,8 +431,10 @@ static void drawTapDance() {
         }
         ImGui::EndTable();
     }
+    pushPrimaryButtonStyle();
     if (ImGui::SmallButton(g_showAllTd ? "Show first 8 slots" : "Show all 32 slots"))
         g_showAllTd = !g_showAllTd;
+    popPrimaryButtonStyle();
 }
 
 // ── timing panel ──────────────────────────────────────────────────────────────
@@ -612,6 +644,7 @@ static void drawIndicators() {
 static void drawPresets() {
     ImGui::SeparatorText("Presets");
 
+    pushPrimaryButtonStyle();
     if (ImGui::Button("Save preset...")) {
         NFD::UniquePath path;
         nfdfilteritem_t f[] = {{"JSON Preset","json"}};
@@ -644,6 +677,7 @@ static void drawPresets() {
     if (ImGui::Button("Reset keymap")) {
         try { viaKmReset(g_dev); loadKeymap(); } catch (...) {}
     }
+    popPrimaryButtonStyle();
 }
 
 // ── styling ───────────────────────────────────────────────────────────────────
@@ -710,16 +744,119 @@ static void setupStyle() {
     colors[ImGuiCol_PlotHistogramHovered] = ImVec4(0.98f, 0.65f, 0.24f, 1.00f);
     colors[ImGuiCol_TextSelectedBg]       = ImVec4(0.29f, 0.50f, 0.79f, 0.45f);
     colors[ImGuiCol_ModalWindowDimBg]     = ImVec4(0.04f, 0.05f, 0.08f, 0.74f);
+
+    // When popups float as their own OS windows, transparent/rounded backgrounds
+    // would show the desktop behind them — make detached windows opaque & square.
+    if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        style.WindowRounding              = 0.0f;
+        style.PopupRounding               = 0.0f;
+        colors[ImGuiCol_WindowBg].w       = 1.0f;
+        colors[ImGuiCol_PopupBg].w        = 1.0f;
+    }
 }
 
-static void pushPrimaryButtonStyle() {
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.20f, 0.55f, 0.90f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.30f, 0.66f, 1.00f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.14f, 0.44f, 0.78f, 1.0f));
+// Center the window on the monitor under the mouse cursor (falls back to the
+// primary monitor if the cursor position can't be determined).
+static void centerWindowOnCursorMonitor(GLFWwindow* win) {
+    int winW, winH;
+    glfwGetWindowSize(win, &winW, &winH);
+
+    int cx = 0, cy = 0;
+    bool haveCursor = false;
+#ifdef _WIN32
+    POINT p;
+    if (GetCursorPos(&p)) { cx = p.x; cy = p.y; haveCursor = true; }
+#endif
+
+    int count = 0;
+    GLFWmonitor** mons = glfwGetMonitors(&count);
+    GLFWmonitor* target = glfwGetPrimaryMonitor();
+    if (haveCursor) {
+        for (int i = 0; i < count; i++) {
+            int mx, my;
+            glfwGetMonitorPos(mons[i], &mx, &my);
+            const GLFWvidmode* vm = glfwGetVideoMode(mons[i]);
+            if (cx >= mx && cx < mx + vm->width && cy >= my && cy < my + vm->height) {
+                target = mons[i];
+                break;
+            }
+        }
+    }
+    if (!target) return;
+
+    int wx, wy, ww, wh;
+    glfwGetMonitorWorkarea(target, &wx, &wy, &ww, &wh);
+    glfwSetWindowPos(win, wx + (ww - winW) / 2, wy + (wh - winH) / 2);
 }
 
-static void popPrimaryButtonStyle() {
-    ImGui::PopStyleColor(3);
+// Custom (non-OS) title bar drawn at the top of the root window. Returns its
+// height. Handles drag-to-move plus minimize/close; the window is fixed-size so
+// there is no maximize/resize. Glyphs are drawn by hand (the bundled font has no
+// window-control symbols).
+static float drawTitleBar(GLFWwindow* win) {
+    const float barH = ImGui::GetFrameHeight() + 6.0f;
+    const float btnW = barH;
+    ImDrawList* dl  = ImGui::GetWindowDrawList();
+    ImVec2 p0       = ImGui::GetCursorScreenPos();
+    float  fullW    = ImGui::GetContentRegionAvail().x;
+    ImVec2 p1       = ImVec2(p0.x + fullW, p0.y + barH);
+
+    dl->AddRectFilled(p0, p1, ImGui::GetColorU32(ImVec4(0.09f, 0.11f, 0.15f, 1.0f)));
+    dl->AddLine(ImVec2(p0.x, p1.y - 1.0f), ImVec2(p1.x, p1.y - 1.0f),
+                ImGui::GetColorU32(ImGuiCol_Border));
+
+    const char* title = "Keychron Q1 Pro Config";
+    ImVec2 ts = ImGui::CalcTextSize(title);
+    dl->AddText(ImVec2(p0.x + 12.0f, p0.y + (barH - ts.y) * 0.5f),
+                ImGui::GetColorU32(ImGuiCol_Text), title);
+
+    // Window buttons (minimize, close) anchored to the right.
+    auto winButton = [&](const char* id, bool isClose) -> bool {
+        ImVec2 bp = ImGui::GetCursorScreenPos();
+        bool clicked = ImGui::InvisibleButton(id, ImVec2(btnW, barH));
+        if (ImGui::IsItemHovered()) {
+            ImU32 c = isClose ? ImGui::GetColorU32(ImVec4(0.86f, 0.22f, 0.27f, 1.0f))
+                              : ImGui::GetColorU32(ImVec4(0.24f, 0.31f, 0.40f, 1.0f));
+            dl->AddRectFilled(bp, ImVec2(bp.x + btnW, bp.y + barH), c);
+        }
+        ImVec2 c = ImVec2(bp.x + btnW * 0.5f, bp.y + barH * 0.5f);
+        ImU32  g = ImGui::GetColorU32(ImGuiCol_Text);
+        float  r = 4.0f;
+        if (isClose) {
+            dl->AddLine(ImVec2(c.x - r, c.y - r), ImVec2(c.x + r, c.y + r), g, 1.5f);
+            dl->AddLine(ImVec2(c.x - r, c.y + r), ImVec2(c.x + r, c.y - r), g, 1.5f);
+        } else {
+            dl->AddLine(ImVec2(c.x - r, c.y + r), ImVec2(c.x + r, c.y + r), g, 1.5f);
+        }
+        return clicked;
+    };
+    ImGui::SetCursorScreenPos(ImVec2(p1.x - btnW * 2.0f, p0.y));
+    if (winButton("##min", false)) glfwIconifyWindow(win);
+    ImGui::SameLine(0.0f, 0.0f);
+    if (winButton("##close", true)) glfwSetWindowShouldClose(win, GLFW_TRUE);
+
+    // Drag region: the bar minus the buttons. Move the window frame-relatively —
+    // after each move the window-relative cursor returns toward the grab point.
+    ImGui::SetCursorScreenPos(p0);
+    ImGui::InvisibleButton("##titlebar_drag", ImVec2(fullW - btnW * 2.0f, barH));
+    static bool   dragging = false;
+    static double startX = 0.0, startY = 0.0;
+    if (ImGui::IsItemActivated()) {
+        dragging = true;
+        glfwGetCursorPos(win, &startX, &startY);
+    }
+    if (dragging) {
+        if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            dragging = false;
+        } else {
+            double mx, my; glfwGetCursorPos(win, &mx, &my);
+            int wx, wy;    glfwGetWindowPos(win, &wx, &wy);
+            glfwSetWindowPos(win, wx + (int)(mx - startX), wy + (int)(my - startY));
+        }
+    }
+
+    ImGui::SetCursorScreenPos(ImVec2(p0.x, p1.y));
+    return barH;
 }
 
 // ── main entry ────────────────────────────────────────────────────────────────
@@ -728,11 +865,18 @@ int gui_main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);    // show after positioning to avoid a jump
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);  // no OS title bar — we draw our own
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);  // fixed-size window
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
-    GLFWwindow* win = glfwCreateWindow(800, 680, "Keychron Q1 Pro Config", nullptr, nullptr);
+    // Height accounts for the custom title bar + content margins (the OS frame
+    // used to sit outside the client area; ours lives inside it).
+    GLFWwindow* win = glfwCreateWindow(800, 728, "Keychron Q1 Pro Config", nullptr, nullptr);
     if (!win) { glfwTerminate(); return 1; }
+    centerWindowOnCursorMonitor(win);
+    glfwShowWindow(win);
     glfwMakeContextCurrent(win);
     glfwSwapInterval(1);
 
@@ -740,6 +884,7 @@ int gui_main() {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;  // picker can float as its own OS window
     setupStyle();
     ImFontConfig fontCfg;
     fontCfg.FontDataOwnedByAtlas = false;
@@ -781,18 +926,36 @@ int gui_main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::SetNextWindowPos({0, 0});
-        ImGui::SetNextWindowSize(io.DisplaySize);
+        // Pin the root window to the main viewport. With multi-viewport enabled,
+        // window positions are global desktop coordinates, so {0,0} would land at
+        // the monitor's upper-left instead of the app window — use the viewport's
+        // actual position/size and bind the root window to it.
+        const ImGuiViewport* mainVp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(mainVp->WorkPos);
+        ImGui::SetNextWindowSize(mainVp->WorkSize);
+        ImGui::SetNextWindowViewport(mainVp->ID);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::Begin("##root", nullptr,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::PopStyleVar(2);
+
+        // Custom title bar (replaces the OS one), then a padded content region
+        // inset from the window edges on all sides.
+        drawTitleBar(win);
+        // AlwaysUseWindowPadding: borderless child windows ignore WindowPadding
+        // otherwise, leaving content flush against the edges.
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(18.0f, 16.0f));
+        ImGui::BeginChild("##content", ImVec2(0.0f, 0.0f),
+                          ImGuiChildFlags_AlwaysUseWindowPadding,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         ImGui::PopStyleVar();
 
         // connection bar
+        pushPrimaryButtonStyle();
         if (!g_connected) {
-            pushPrimaryButtonStyle();
             if (ImGui::Button("Connect")) {
                 if (g_dev.open()) {
                     g_connected = true;
@@ -803,7 +966,6 @@ int gui_main() {
                     snprintf(g_statusMsg, sizeof(g_statusMsg), "Device not found (VID 3434 PID 0610)");
                 }
             }
-            popPrimaryButtonStyle();
         } else {
             if (ImGui::Button("Reconnect")) {
                 g_dev.close(); g_connected = false;
@@ -815,6 +977,7 @@ int gui_main() {
                 }
             }
         }
+        popPrimaryButtonStyle();
         ImGui::SameLine();
         ImGui::TextDisabled("%s", g_statusMsg);
         ImGui::Separator();
@@ -833,6 +996,14 @@ int gui_main() {
                     ImGui::EndTabItem();
                 }
                 // remaining tabs disabled while identifying to prevent concurrent HID calls
+                if (ImGui::BeginTabItem("Features")) {
+                    ImGui::BeginChild("##tab_feat");
+                    ImGui::BeginDisabled(g_identifying);
+                    drawFeatures();
+                    ImGui::EndDisabled();
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
                 if (ImGui::BeginTabItem("Tap Dance")) {
                     ImGui::BeginChild("##tab_td");
                     ImGui::BeginDisabled(g_identifying);
@@ -845,14 +1016,6 @@ int gui_main() {
                     ImGui::BeginChild("##tab_timing");
                     ImGui::BeginDisabled(g_identifying);
                     drawTiming();
-                    ImGui::EndDisabled();
-                    ImGui::EndChild();
-                    ImGui::EndTabItem();
-                }
-                if (ImGui::BeginTabItem("Features")) {
-                    ImGui::BeginChild("##tab_feat");
-                    ImGui::BeginDisabled(g_identifying);
-                    drawFeatures();
                     ImGui::EndDisabled();
                     ImGui::EndChild();
                     ImGui::EndTabItem();
@@ -892,6 +1055,7 @@ int gui_main() {
             ImGui::EndDisabled();
         }
 
+        ImGui::EndChild();  // ##content
         ImGui::End();
         ImGui::Render();
 
@@ -901,6 +1065,14 @@ int gui_main() {
         glClearColor(0.08f, 0.10f, 0.13f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        // Render any popups that floated out into their own OS windows.
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+            GLFWwindow* backup = glfwGetCurrentContext();
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault();
+            glfwMakeContextCurrent(backup);
+        }
         glfwSwapBuffers(win);
     }
 

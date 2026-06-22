@@ -143,6 +143,7 @@ NAMES.update({
     "QK_LOCK": 0x7C59, "LOCK": 0x7C59,       # Key Lock
     "AS_DOWN": 0x7C10, "AS_UP": 0x7C11, "AS_RPT": 0x7C12,
     "AS_ON": 0x7C13, "AS_OFF": 0x7C14, "AS_TOGG": 0x7C15,
+    "QK_BOOT": 0x7C00,                       # enter DFU bootloader (e.g. combo output)
 })
 CODE_TO_NAME = {v: k for k, v in NAMES.items()}
 

@@ -56,6 +56,9 @@ QMK's built-in `ONESHOT_TIMEOUT` is disabled and the keymap implements this at r
 
 **Combos:** 16 slots. Each has up to 4 input keycodes (`KC_NO`-padded) and one output keycode;
 a slot fires only when enabled and given ≥2 input keys. Inputs/outputs are normal keycodes.
+The output may be any keycode, including `QK_BOOT` (`0x7C00`) — a combo with that output enters
+the DFU bootloader (handy as a software "reset" chord for reflashing). Use a deliberate 3–4 key
+chord to avoid accidental entry.
 
 **Key overrides:** 16 slots. `trigger`+`replacement` are keycodes; `trigger_mods`,
 `suppressed_mods`, `negative_mod_mask` are **8-bit modifier masks** (bit 0 LCtl, 1 LSft, 2 LAlt,

@@ -159,7 +159,7 @@ Object.assign(KC,{COLN:0x0233,EXLM:0x021E,AT:0x021F,HASH:0x0220,DLR:0x0221,PERC:
   CIRC:0x0223,AMPR:0x0224,ASTR:0x0225,LPRN:0x0226,RPRN:0x0227,UNDS:0x022D,PLUS:0x022E,
   LCBR:0x022F,RCBR:0x0230,PIPE:0x0231,DQUO:0x0234,TILD:0x0235,LT:0x0236,GT:0x0237,QUES:0x0238});
 Object.assign(KC,{CW_TOGG:0x7C73,QK_LOCK:0x7C59,AS_DOWN:0x7C10,AS_UP:0x7C11,AS_RPT:0x7C12,
-  AS_ON:0x7C13,AS_OFF:0x7C14,AS_TOGG:0x7C15});
+  AS_ON:0x7C13,AS_OFF:0x7C14,AS_TOGG:0x7C15,QK_BOOT:0x7C00});
 // Modifiers
 Object.assign(KC,{LCTL:0xE0,LSFT:0xE1,LALT:0xE2,LGUI:0xE3,RCTL:0xE4,RSFT:0xE5,RALT:0xE6,RGUI:0xE7});
 // Media / consumer / system (knob press defaults to MUTE = 0xA8)
@@ -214,8 +214,12 @@ function nameOf(code){ if(code>=0x5700&&code<=0x57FF) return "TD"+(code&0xFF);
   return "0x"+code.toString(16).padStart(4,"0").toUpperCase(); }
 // VIA-style category from a keycode's value range; mirrors src/keycodes.cpp.
 function categoryOf(c){
-  if(c===0x00||c===0x01||c===0x7C73||c===0x7C59||(c>=0x7C10&&c<=0x7C15)||c===0x7013) return "Special";
-  if(c<=0x73||(c>=0xE0&&c<=0xE7)||(c>=0x0200&&c<=0x02FF)) return "Basic";
+  if(c===0x00||c===0x01||c===0x7C73||c===0x7C59||(c>=0x7C10&&c<=0x7C15)||c===0x7C00||c===0x7013) return "Special";
+  if(c>=0x04&&c<=0x1D) return "Alpha";
+  if(c>=0xE0&&c<=0xE7) return "Mods";
+  if((c>=0x3A&&c<=0x45)||(c>=0x68&&c<=0x73)) return "Fn";
+  if((c>=0x1E&&c<=0x27)||(c>=0x2D&&c<=0x38)||(c>=0x0200&&c<=0x02FF)) return "Symbols";
+  if(c<=0x53) return "Nav";
   if(c>=0xA5&&c<=0xC2) return "Media";
   if(c>=0x5200&&c<=0x52FF) return "Layers";
   if(c>=0x7820&&c<=0x782A) return "Lighting";
@@ -223,11 +227,17 @@ function categoryOf(c){
   return "Special";
 }
 const KCATS=(()=>{
-  const order=["Basic","Media","Layers","Lighting","Special","Custom"];
+  const order=["Alpha","Fn","Symbols","Nav","Mods","Media","Layers","Lighting","Special","Custom"];
   const buckets={}; order.forEach(o=>buckets[o]=[]);
   for(const e of ENTRIES) buckets[categoryOf(e[1])].push(e);
-  return order.map(o=>[o, buckets[o].sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true}))])
-              .filter(([,es])=>es.length);
+  const MOD_ORD=["LCTL","LSFT","LALT","LGUI","RCTL","RSFT","RALT","RGUI"];
+  return order.map(o=>{
+    const es=buckets[o]||[];
+    if(o==="Mods") es.sort((a,b)=>MOD_ORD.indexOf(a[0])-MOD_ORD.indexOf(b[0]));
+    else if(o==="Fn"||o==="Nav") es.sort((a,b)=>a[1]-b[1]);
+    else es.sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true}));
+    return [o,es];
+  }).filter(([,es])=>es.length);
 })();
 // Modal keycode picker: tabs per category, a button grid per tab.
 // Resolves to the chosen code, or null on cancel.
