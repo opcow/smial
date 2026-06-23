@@ -418,6 +418,7 @@ function enterDemo(){
   const d=DEMO_DATA;
   const flagBits=FLAG_KEYS.reduce((m,k,i)=>m|(d.flags[k]?1<<i:0),0);
   const noop=()=>Promise.resolve();
+  const safeParse=(kc)=>{try{return kcParse(kc);}catch(e){return 0;}};
 
   getGlobal=()=>Promise.resolve({tt:d.tapping_term,slots:32,comboSlots:16,koSlots:16});
   getFeat=()=>Promise.resolve({flags:flagBits,quicktap:d.quick_tap_term,astimeout:d.autoshift_timeout,
@@ -425,20 +426,20 @@ function enterDemo(){
     oneshot:d.oneshot_timeout});
   getTd=i=>{const t=d.tap_dance[i]||{tap:"NO",secondary:"NO",mode:"double",enabled:false};
     const ph="permissive_hold"in t?t.permissive_hold:null;
-    return Promise.resolve({tap:kcParse(t.tap),sec:kcParse(t.secondary),en:t.enabled?1:0,
+    return Promise.resolve({tap:safeParse(t.tap),sec:safeParse(t.secondary),en:t.enabled?1:0,
       mode:t.mode==="hold"?1:0,tappingTerm:t.tapping_term||0,phFlags:ph===null?0:(0x02|(ph?0x01:0))});};
   getCombo=i=>{const c=d.combos[i]||{keys:["NO","NO","NO","NO"],output:"NO",enabled:false};
-    return Promise.resolve({keys:c.keys.map(kcParse),output:kcParse(c.output),enabled:c.enabled});};
+    return Promise.resolve({keys:c.keys.map(safeParse),output:safeParse(c.output),enabled:c.enabled});};
   getKo=i=>{const k=d.key_overrides[i]||{trigger:"NO",replacement:"NO",trigger_mods:[],
     suppressed_mods:[],negative_mods:[],layers:[],options:7,enabled:false};
-    return Promise.resolve({trigger:kcParse(k.trigger),replacement:kcParse(k.replacement),
+    return Promise.resolve({trigger:safeParse(k.trigger),replacement:safeParse(k.replacement),
       triggerMods:listToMask(k.trigger_mods),suppressedMods:listToMask(k.suppressed_mods),
       negativeMods:listToMask(k.negative_mods),layers:k.layers.reduce((m,l)=>m|(1<<l),0),
       options:k.options??7,enabled:k.enabled});};
   getInd=i=>{const v=d.indicators[i]||{enabled:false,color:"#000000"};
     return Promise.resolve({en:v.enabled?1:0,r:parseInt(v.color.substr(1,2),16),
       g:parseInt(v.color.substr(3,2),16),b:parseInt(v.color.substr(5,2),16)});};
-  viaGet=(l,r,c)=>Promise.resolve(kcParse(d.keymap[l][r*COLS+c]||"NO"));
+  viaGet=(l,r,c)=>Promise.resolve(safeParse(d.keymap[l][r*COLS+c]||"NO"));
 
   setTT=noop;setTdEn=noop;setTdMode=noop;resetCfg=noop;setTdKc=noop;
   setFlag=noop;setParam=noop;setInd=noop;setCombo=noop;setKo=noop;setTdTiming=noop;viaSet=noop;viaKmReset=noop;
