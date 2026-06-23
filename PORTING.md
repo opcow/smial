@@ -5,8 +5,12 @@ real-time-configuration interface to **another QMK keyboard that has no Vial por
 board speaks this protocol, the same `q1config.py` CLI and `q1config.html` WebHID GUI work
 against it (after a VID/PID + layout tweak).
 
-The reference implementation is the Keychron Q1 Pro `rtcfg` keymap. Exact byte layouts live
-in [PROTOCOL.md](PROTOCOL.md); this document focuses on *how it's wired* and *what to copy*.
+The original reference is the Keychron Q1 Pro `rtcfg` keymap. The same firmware has since been
+factored into a shared core and ported across the whole Keychron **`_max`** family (Q1/Q2/Q3/
+Q5/Q6/Q8/Q60/Q65 Max, K1/K3/K5/K7 Max, V1/V2/V5 Max — ANSI/ISO/JIS, RGB and white), so a
+second board is now a thin layout-only keymap. See **§7** for that shared-core pattern. Exact
+byte layouts live in [PROTOCOL.md](PROTOCOL.md); this document focuses on *how it's wired* and
+*what to copy*.
 
 ---
 
@@ -118,6 +122,10 @@ bool via_command_kb(uint8_t *data, uint8_t length) {
 ```
 
 …then implement `via_command_user()` (same body as the `via_command_kb` above) in `keymap.c`.
+If a whole board family shares one common `.c` (Keychron's `common/keychron_common.c` backs
+all `_max` boards), add the weak hook + `default:` call **there once** and every board in the
+family is routed — the keymap that links a strong `via_command_user` (the rtcfg core) claims
+the byte; all other keymaps are unaffected.
 
 **No VIA** — define `raw_hid_receive()` directly and dispatch on `data[0]`.
 
@@ -253,7 +261,8 @@ The protocol is board-independent, so the CLI and GUI port with two changes:
    key coordinates from its `info.json` `layouts[...]layout` (each `{matrix:[r,c], x, y, w}`).
 
 Drop any subcommands/UI for features you didn't implement. The preset JSON schema is
-unchanged.
+unchanged. Every board has its own VID/PID, so multi-board support is just a table of
+`{VID, PID, layout}` entries selected after the device is opened.
 
 ---
 
@@ -269,14 +278,48 @@ unchanged.
   data (the layer), *not* a status — don't status-check those.
 - **Weak symbols + LTO:** keep `LTO_ENABLE` off; LTO can interfere with overriding weak
   functions across compilation units.
-- **Combos in the introspection TU:** if your keymap is `#include`d by `keymap_introspection.c`,
-  override `combo_t key_combos[]` (served by `combo_count_raw`/`combo_get_raw`) — not the weak
+- **Combos in the introspection TU:** `keymap_introspection.c` `#include`s the keymap and takes
+  `sizeof(key_combos)`, so the `combo_t key_combos[]` table must be **defined in the keymap TU**
+  (the core `extern`s and fills it) — and you override that array, not the weak
   `combo_count()`/`combo_get()`, which live in the same TU and can't be redefined.
 - **Custom debounce init timing:** `debounce_init()` fires before EEPROM config is loaded; defer
   per-method allocation/selection to the first `debounce()` call so it sees the loaded settings.
 - **RAM vs PROGMEM tables:** rebuilding combo/keymap tables in RAM works on ARM, where `pgm_read_*`
   is a plain memory read; on AVR the data must be in PROGMEM.
 - **WebHID:** the GUI must be served from `http://localhost` (or https); `file://` is blocked.
+
+---
+
+## 7. Porting to a whole board family (the shared-core pattern)
+
+Once more than one board needs this, don't copy `keymap.c` around — split it into a **shared
+core** plus **thin per-board keymaps**. This is how the Keychron `_max` fleet is built
+(`keyboards/keychron/rtcfg_common/` in the qmk tree):
+
+- **Shared core** (`rtcfg_common.c` + `.h` + `.mk`, pulled in with one `include` from each
+  keymap's `rules.mk`) owns everything board-independent: the `user_config_t` + EEPROM I/O,
+  the `0xAC` handler (`via_command_user`), tap-dance slots, combos, key overrides, one-shot,
+  Caps Word, Auto Shift, the debounce dispatcher, and the state indicators. Move `debounce_rt.c`
+  here too.
+- **Each board keymap** keeps only what QMK's introspection must see in the keymap translation
+  unit — `keymaps[]`, `encoder_map[]` (knob boards), and the `combo_t key_combos[N]` table
+  (the core `extern`s and fills it) — plus a 4-line `process_record_user` that calls the
+  board's existing special-key handler then `rtcfg_process_record()`. Copy the layout straight
+  from the board's stock `via` keymap; this is the only per-board work.
+
+Three things make the core board-agnostic:
+
+- **Don't bake layer names into the core.** Boards differ (`MAC_BASE/MAC_FN/WIN_BASE/WIN_FN`,
+  but also `…/WIN_FN1/FN2`, or a 60% `…/FN/L3`). Keep each board's own layer enum in its
+  keymap and have the core reference the FN-indicator layer by a numeric macro
+  (`RTCFG_FN_INDICATOR_LAYER`, default `3`), overridable in a board's `config.h`.
+- **Support both backlight types.** Guard the indicator on `RGB_MATRIX_ENABLE`
+  (`rgb_matrix_set_color`, full color) vs `LED_MATRIX_ENABLE` (`led_matrix_set_value`, single
+  color — derive brightness from the stored color's strongest channel) so white variants build.
+- **Compile is the verification.** With no hardware, a port that compiles + links and speaks
+  the protocol is most of the way there; build every target (`qmk compile -kb … -km rtcfg`) in
+  CI. A thin generator that rewrites each board's `via` keymap into its `rtcfg` keymap keeps the
+  layouts faithful and the boilerplate identical across the fleet.
 
 ---
 

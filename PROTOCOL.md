@@ -1,12 +1,15 @@
 # Wire protocol
 
 The firmware and this app must agree on these definitions. The authoritative source is the
-QMK keymap (`keychron/q1_pro/ansi_knob/keymaps/rtcfg/keymap.c`); this file mirrors it so the
-two repos stay in sync. Update both together when changing the protocol.
+shared rtcfg core (`keychron/rtcfg_common/rtcfg_common.c`, used by every Keychron `_max`
+board; the Q1 Pro keymap `keychron/q1_pro/ansi_knob/keymaps/rtcfg/keymap.c` is the original
+self-contained copy). This file mirrors them so the two repos stay in sync — update both
+together when changing the protocol.
 
 ## Transport
 
-- USB raw HID: **usage page `0xFF60`, usage `0x61`**, VID **`0x3434`**, PID **`0x0610`**.
+- USB raw HID: **usage page `0xFF60`, usage `0x61`**. VID/PID are per board (Q1 Pro is
+  **`0x3434`/`0x0610`**); each `_max` board has its own — see its `info.json`.
 - 32-byte reports, report ID 0. Each request gets one 32-byte reply.
 - Custom commands use a leading **`0xAC`** byte and are routed in firmware via
   `via_command_user()`. Standard VIA commands (no `0xAC`) are handled by `via.c`.
