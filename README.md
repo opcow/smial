@@ -40,11 +40,11 @@ board that lacks a Vial port.
 
 Native app:
 
-<img src="images/ss-2.png" width="800" alt="native app">
+<img src="images/ss-2.png" width="400" alt="native app">
 
 Browser GUI:
 
-<img src="images/ss-1.png" width="807" alt="browser GUI">
+<img src="images/ss-1.png" width="404" alt="browser GUI">
 
 ## Requirements
 
