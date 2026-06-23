@@ -103,8 +103,8 @@ target_link_libraries(q1config PRIVATE
 )
 
 if(WIN32)
-  # setupapi needed by hidapi on Windows
-  target_link_libraries(q1config PRIVATE setupapi)
+  # setupapi needed by hidapi on Windows; dwmapi for rounded-corner window attribute
+  target_link_libraries(q1config PRIVATE setupapi dwmapi)
   # Windows subsystem (no console ever created); CLI re-attaches via AttachConsole
   set_target_properties(q1config PROPERTIES WIN32_EXECUTABLE TRUE)
   target_link_options(q1config PRIVATE /ENTRY:mainCRTStartup)

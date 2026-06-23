@@ -10,16 +10,20 @@ static constexpr int TD_SLOT_COUNT = 32;
 static constexpr int KM_LAYERS = 4;
 static constexpr int KM_ROWS   = 6;
 static constexpr int KM_COLS   = 16;
-// Runtime combos / key overrides (must match COMBO_SLOT_COUNT / KO_SLOT_COUNT).
+// Runtime combos / key overrides (must match firmware).
 static constexpr int COMBO_SLOT_COUNT = 16;
 static constexpr int COMBO_MAX_KEYS   = 4;
 static constexpr int KO_SLOT_COUNT    = 16;
+// Per-slot PH flags (must match bit encoding in keymap.c td_ph_has/td_ph_value)
+static constexpr uint8_t TD_PH_VALUE = 0x01;  // permissive-hold on/off value
+static constexpr uint8_t TD_HAS_PH   = 0x02;  // whether PH is overridden for this slot
 
 // td_enabled/td_mode are also in GET_GLOBAL but unused here (read per-slot via
 // getTd); they're 64-bit on the wire now, so we don't decode them.
 struct GlobalState { uint16_t tt; uint8_t slots; uint8_t comboSlots; uint8_t koSlots; };
 struct FeatState   { uint16_t flags; uint16_t quicktap; uint16_t astimeout; uint16_t cwtimeout; uint16_t debounce; uint8_t debounceMethod; uint16_t oneshotTimeout; };
-struct TdSlot      { uint16_t tap; uint16_t sec; bool enabled; uint8_t mode; }; // mode: 0=double 1=hold
+struct TdSlot      { uint16_t tap; uint16_t sec; bool enabled; uint8_t mode;
+                     uint16_t tappingTerm; uint8_t phFlags; }; // mode: 0=double 1=hold
 struct IndState    { bool enabled; uint8_t r, g, b; };
 struct Combo       { uint16_t keys[COMBO_MAX_KEYS]; uint16_t output; bool enabled; };
 struct KeyOverride { uint16_t trigger; uint16_t replacement; uint8_t triggerMods;
@@ -39,6 +43,7 @@ void        setTdMode(HidDevice& d, int idx, uint8_t mode);
 void        resetCfg(HidDevice& d);
 TdSlot      getTd(HidDevice& d, int idx);
 void        setTdKc(HidDevice& d, int idx, uint16_t tap, uint16_t sec);
+void        setTdTiming(HidDevice& d, int idx, uint16_t tt, uint8_t phFlags);
 void        startIdentify(HidDevice& d);
 FeatState   getFeat(HidDevice& d);
 void        setFlag(HidDevice& d, int bit, bool on);

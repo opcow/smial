@@ -33,6 +33,7 @@
   .layers button.on { background:var(--accent); border-color:#258; }
   /* tables */
   table { border-collapse:collapse; width:100%; }
+  #tdtable { width:auto; }
   th,td { padding:3px 6px; text-align:left; border-bottom:1px solid #34373f; font-size:13px; }
   th { color:var(--muted); font-weight:600; }
   select,input[type=number],input[type=text] { background:#23252b; color:var(--text);
@@ -91,7 +92,7 @@
     <div class="hint" style="margin-bottom:6px">Disabled slots act as their plain "tap" key.
       A slot only affects a physical key if that key is assigned <code>TDn</code> above.</div>
     <table id="tdtable"><thead><tr>
-      <th>#</th><th>name</th><th>tap</th><th>secondary</th><th>mode</th><th>enabled</th>
+      <th>#</th><th>name</th><th>tap</th><th>secondary</th><th>mode</th><th>tap term</th><th>PH</th><th>enabled</th>
     </tr></thead><tbody></tbody></table>
     <div class="hint" style="margin-top:6px"><button id="showall">Show all 32 slots</button></div>
   </div>
@@ -330,7 +331,7 @@ const setTT     =v=>xfer([CMD,0x02,v&0xff,(v>>8)&0xff]);
 const setTdEn   =(i,on)=>xfer([CMD,0x03,i,on?1:0]);
 const setTdMode =(i,m)=>xfer([CMD,0x04,i,m]);
 const resetCfg  =()=>xfer([CMD,0x05]);
-const getTd     =i=>xfer([CMD,0x06,i]).then(d=>({tap:u16(d,3),sec:u16(d,5),en:d[7],mode:d[8]}));
+const getTd     =i=>xfer([CMD,0x06,i]).then(d=>({tap:u16(d,3),sec:u16(d,5),en:d[7],mode:d[8],tappingTerm:u16(d,9),phFlags:d[11]}));
 const setTdKc   =(i,tap,sec)=>xfer([CMD,0x07,i,tap&0xff,(tap>>8)&0xff,sec&0xff,(sec>>8)&0xff]);
 const getFeat   =()=>xfer([CMD,0x09]).then(d=>({flags:u16(d,2),quicktap:u16(d,4),astimeout:u16(d,6),cwtimeout:u16(d,8),debounce:d[10],dbmethod:d[11],oneshot:u16(d,12)}));
 const setFlag   =(bit,on)=>xfer([CMD,0x0A,bit,on?1:0]);
@@ -345,6 +346,7 @@ const getKo     =i=>xfer([CMD,0x10,i]).then(d=>({trigger:u16(d,3),replacement:u1
                               suppressedMods:d[8],negativeMods:d[9],layers:d[10],options:d[11],enabled:!!d[12]}));
 const setKo     =(i,k)=>xfer([CMD,0x11,i,k.trigger&0xff,(k.trigger>>8)&0xff,k.replacement&0xff,(k.replacement>>8)&0xff,
                               k.triggerMods&0xff,k.suppressedMods&0xff,k.negativeMods&0xff,k.layers&0xff,k.options&0xff,k.enabled?1:0]);
+const setTdTiming=(i,tt,f)=>xfer([CMD,0x14,i,tt&0xff,(tt>>8)&0xff,f]);
 // VIA dynamic keymap (big-endian keycode)
 const viaGet    =(l,r,c)=>xfer([0x04,l,r,c]).then(d=>(d[4]<<8)|d[5]);
 const viaSet    =(l,r,c,kc)=>xfer([0x05,l,r,c,(kc>>8)&0xff,kc&0xff]);
@@ -432,22 +434,36 @@ async function buildTapDance(){
   const n=showAll?32:8;
   for(let i=0;i<n;i++){
     const t=await getTd(i);
+    const phMode=(t.phFlags&0x02)?((t.phFlags&0x01)?1:2):0;
     const tr=document.createElement("tr");
     tr.innerHTML=`<td>${i}</td><td>${TD_NAMES[i]}</td>
       <td class="tdtap"></td>
       <td class="tdsec"></td>
-      <td><select class="mode"><option value="0"${t.mode?"":" selected"}>double</option>
+      <td><select class="mode" style="width:78px"><option value="0"${t.mode?"":" selected"}>double</option>
           <option value="1"${t.mode?" selected":""}>hold</option></select></td>
+      <td><input type="number" class="tt" min="0" max="1000" value="${t.tappingTerm}"
+          style="width:64px" title="0 = use global tapping term"></td>
+      <td><select class="ph" style="width:78px"><option value="0"${phMode===0?" selected":""}>Global</option>
+          <option value="1"${phMode===1?" selected":""}>On</option>
+          <option value="2"${phMode===2?" selected":""}>Off</option></select></td>
       <td><input type="checkbox" class="en" ${t.en?"checked":""}></td>`;
     tb.appendChild(tr);
     const mode=tr.querySelector(".mode"), en=tr.querySelector(".en");
+    const ttInp=tr.querySelector(".tt"), phSel=tr.querySelector(".ph");
     let tapBtn, secBtn;
     const saveKc=()=>setTdKc(i,+tapBtn.dataset.kc,+secBtn.dataset.kc);
+    const saveTiming=()=>{
+      const tt=parseInt(ttInp.value)||0;
+      const ph=+phSel.value;
+      setTdTiming(i,tt,ph===0?0:(0x02|(ph===1?0x01:0)));
+    };
     tapBtn=kcField(t.tap,`TD${i} tap`,saveKc);
     secBtn=kcField(t.sec,`TD${i} secondary`,saveKc);
     tr.querySelector(".tdtap").appendChild(tapBtn);
     tr.querySelector(".tdsec").appendChild(secBtn);
     mode.onchange=()=>setTdMode(i,+mode.value);
+    ttInp.onchange=saveTiming;
+    phSel.onchange=saveTiming;
     en.onchange=()=>setTdEn(i,en.checked);
   }
 }
@@ -602,7 +618,9 @@ async function readConfig(){
   const flags={}; FLAG_KEYS.forEach((k,bit)=>flags[k]=!!(f.flags&(1<<bit)));
   const tap_dance=[];
   for(let i=0;i<32;i++){ const t=await getTd(i);
-    tap_dance.push({tap:nameOf(t.tap),secondary:nameOf(t.sec),mode:t.mode?"hold":"double",enabled:!!t.en}); }
+    const ph=(t.phFlags&0x02)?!!(t.phFlags&0x01):null;
+    tap_dance.push({tap:nameOf(t.tap),secondary:nameOf(t.sec),mode:t.mode?"hold":"double",
+                    enabled:!!t.en,tapping_term:t.tappingTerm,permissive_hold:ph}); }
   const combos=[];
   for(let i=0;i<16;i++){ const c=await getCombo(i);
     combos.push({keys:c.keys.map(nameOf),output:nameOf(c.output),enabled:c.enabled}); }
@@ -642,7 +660,13 @@ async function writeConfig(p){
   for(let i=0;i<32 && i<(p.tap_dance||[]).length;i++){ const c=cur.tap_dance[i],t=p.tap_dance[i];
     if(c.tap!==t.tap||c.secondary!==t.secondary){ await setTdKc(i,kcParse(t.tap),kcParse(t.secondary)); n++; }
     if(c.mode!==t.mode){ await setTdMode(i,t.mode==="hold"?1:0); n++; }
-    if(c.enabled!==t.enabled){ await setTdEn(i,t.enabled?1:0); n++; } }
+    if(c.enabled!==t.enabled){ await setTdEn(i,t.enabled?1:0); n++; }
+    const ttSame=!("tapping_term" in t)||c.tapping_term===t.tapping_term;
+    const phSame=!("permissive_hold" in t)||JSON.stringify(c.permissive_hold)===JSON.stringify(t.permissive_hold);
+    if(!ttSame||!phSame){
+      const tt=t.tapping_term||0;
+      const ph=("permissive_hold" in t)?t.permissive_hold:null;
+      await setTdTiming(i,tt,ph===null?0:(0x02|(ph?0x01:0))); n++; } }
   for(let i=0;i<16 && i<(p.combos||[]).length;i++){ const c=cur.combos[i],t=p.combos[i];
     if(JSON.stringify(c)!==JSON.stringify(t)){
       await setCombo(i,{keys:(t.keys||[]).map(kcParse).concat([0,0,0,0]).slice(0,4),

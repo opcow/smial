@@ -34,12 +34,16 @@ void resetCfg(HidDevice& d) { d.xfer({CMD, 0x05}); }
 
 TdSlot getTd(HidDevice& d, int i) {
     auto r = d.xfer({CMD, 0x06, (uint8_t)i});
-    return {u16(r,3), u16(r,5), (bool)r[7], r[8]};
+    return {u16(r,3), u16(r,5), (bool)r[7], r[8], u16(r,9), r[11]};
 }
 void setTdKc(HidDevice& d, int i, uint16_t tap, uint16_t sec) {
     d.xfer({CMD, 0x07, (uint8_t)i,
             (uint8_t)(tap & 0xFF), (uint8_t)(tap >> 8),
             (uint8_t)(sec & 0xFF), (uint8_t)(sec >> 8)});
+}
+void setTdTiming(HidDevice& d, int i, uint16_t tt, uint8_t f) {
+    d.xfer({CMD, 0x14, (uint8_t)i,
+            (uint8_t)(tt & 0xFF), (uint8_t)(tt >> 8), f});
 }
 void startIdentify(HidDevice& d) { d.xfer({CMD, 0x08}); }
 

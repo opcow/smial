@@ -44,8 +44,11 @@ nlohmann::json readConfig(HidDevice& d) {
     nlohmann::json td = nlohmann::json::array();
     for (int i = 0; i < TD_SLOT_COUNT; i++) {
         auto s = getTd(d, i);
+        nlohmann::json ph = nlohmann::json();  // null = no PH override
+        if (s.phFlags & TD_HAS_PH) ph = (bool)(s.phFlags & TD_PH_VALUE);
         td.push_back({{"tap", nameOf(s.tap)}, {"secondary", nameOf(s.sec)},
-                      {"mode", s.mode ? "hold" : "double"}, {"enabled", s.enabled}});
+                      {"mode", s.mode ? "hold" : "double"}, {"enabled", s.enabled},
+                      {"tapping_term", s.tappingTerm}, {"permissive_hold", ph}});
     }
 
     nlohmann::json ind = nlohmann::json::array();
@@ -92,7 +95,8 @@ nlohmann::json readConfig(HidDevice& d) {
             {"debounce_time", f.debounce}, {"debounce_method", dbMethodName(f.debounceMethod)},
             {"oneshot_timeout", f.oneshotTimeout},
             {"flags", flags}, {"tap_dance", td}, {"combos", combos},
-            {"key_overrides", kos}, {"indicators", ind}, {"keymap", keymap}};
+            {"key_overrides", kos}, {"indicators", ind},
+            {"keymap", keymap}};
 }
 
 int writeConfig(HidDevice& d, const nlohmann::json& p) {
@@ -127,6 +131,17 @@ int writeConfig(HidDevice& d, const nlohmann::json& p) {
             { setTdMode(d, i, ptd[i]["mode"] == "hold" ? 1 : 0); n++; }
         if (ctd[i]["enabled"] != ptd[i]["enabled"])
             { setTdEn(d, i, ptd[i]["enabled"]); n++; }
+        bool ttSame = !ptd[i].contains("tapping_term") ||
+                      ctd[i]["tapping_term"] == ptd[i]["tapping_term"];
+        bool phSame = !ptd[i].contains("permissive_hold") ||
+                      ctd[i]["permissive_hold"] == ptd[i]["permissive_hold"];
+        if (!ttSame || !phSame) {
+            uint16_t tt = (uint16_t)ptd[i].value("tapping_term", 0);
+            uint8_t  f  = 0;
+            auto ph = ptd[i].value("permissive_hold", nlohmann::json());
+            if (!ph.is_null()) { f |= TD_HAS_PH; if (ph.get<bool>()) f |= TD_PH_VALUE; }
+            setTdTiming(d, i, tt, f); n++;
+        }
     }
 
     if (p.contains("combos")) {

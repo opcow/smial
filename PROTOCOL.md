@@ -23,7 +23,7 @@ Request byte 0 = `0xAC`, byte 1 = subcommand. For `0xAC` replies, **byte 1 is a 
 | 03 | SET_TD_EN | idx, en(0/1) | global |
 | 04 | SET_TD_MODE | idx, mode(0=double,1=hold) | global |
 | 05 | RESET | — | global (config reset to firmware defaults) |
-| 06 | GET_TD | idx | `[2]` idx, `[3..4]` tap kc, `[5..6]` secondary kc, `[7]` enabled, `[8]` mode |
+| 06 | GET_TD | idx | `[2]` idx, `[3..4]` tap kc, `[5..6]` secondary kc, `[7]` enabled, `[8]` mode, `[9..10]` tapping_term (LE, 0=inherit global), `[11]` ph_flags |
 | 07 | SET_TD_KC | idx, tap_lo, tap_hi, sec_lo, sec_hi | `[2]` idx |
 | 08 | IDENTIFY | — | ack `[1]=00`; then an **unsolicited** report `[0]=AC,[1]=08,[2]=row,[3]=col,[4..5]=kc` on the next keypress (that press is consumed) |
 | 09 | GET_FEATURES | — | `[2..3]` flags, `[4..5]` quick_tap_term, `[6..7]` autoshift_timeout, `[8..9]` caps_word_timeout, `[10]` debounce_time, `[11]` debounce_method, `[12..13]` oneshot_timeout |
@@ -35,6 +35,7 @@ Request byte 0 = `0xAC`, byte 1 = subcommand. For `0xAC` replies, **byte 1 is a 
 | 0F | SET_COMBO | idx, key0..3 (LE u16 ×4), output (LE), enabled | `[2]` idx |
 | 10 | GET_KO | idx | `[2]` idx, `[3..4]` trigger (LE), `[5..6]` replacement (LE), `[7]` trigger_mods, `[8]` suppressed_mods, `[9]` negative_mod_mask, `[10]` layers, `[11]` options, `[12]` enabled |
 | 11 | SET_KO | idx, trig (LE), repl (LE), trig_mods, supp_mods, neg_mods, layers, options, enabled | `[2]` idx |
+| 14 | SET_TD_TIMING | idx, tt_lo, tt_hi, ph_flags | `[2]` idx |
 
 All multi-byte scalars are **little-endian**.
 
@@ -49,6 +50,9 @@ All multi-byte scalars are **little-endian**.
 
 **Tap-dance slots:** 32 total, named `TD0`–`TD31` (the name is the slot index). Slots 0–7 ship
 with default keycodes; 8–31 start blank. The keycode that triggers slot *n* is `TD(n) = 0x5700 | n`.
+GET_TD `ph_flags` bits: bit 0 (`TD_PH_VALUE`) = permissive-hold on/off value; bit 1 (`TD_HAS_PH`)
+= whether PH is overridden for this slot. `0x00` = inherit global, `0x02` = override Off, `0x03` = override On.
+SET_TD_TIMING `tapping_term = 0` means inherit global; `ph_flags` encoding is the same as GET_TD.
 
 **One-shot timeout:** `oneshot_timeout` is ms; `0` = a one-shot mod/layer never auto-expires.
 QMK's built-in `ONESHOT_TIMEOUT` is disabled and the keymap implements this at runtime
@@ -86,8 +90,8 @@ Layers: 0 MAC_BASE, 1 MAC_FN, 2 WIN_BASE, 3 WIN_FN. Matrix is 6 rows × 16 cols.
 
 ## EEPROM / versioning
 
-Config persists in QMK's user data block (496 bytes). `EECONFIG_USER_DATA_VERSION` in the
-firmware's `config.h` (currently `0x00514409`) is bumped whenever the struct layout changes;
+Config persists in QMK's user data block (576 bytes). `EECONFIG_USER_DATA_VERSION` in the
+firmware's `config.h` (currently `0x00514411`) is bumped whenever the struct layout changes;
 on the next flash the stored config is discarded and firmware defaults reapplied.
 
 **One-time keymap reset:** growing the user block shifts the dynamic-keymap EEPROM base (it
@@ -110,7 +114,8 @@ changes `EECONFIG_USER_DATA_SIZE`, run **Reset keymap** once to restore key assi
   "flags": { "caps_word": true, "permissive_hold": false, "hold_on_other_key": false,
              "retro_tapping": false, "auto_shift": false,
              "caps_word_double_shift": true, "caps_word_both_shifts": false },
-  "tap_dance": [ { "tap": "NO", "secondary": "CAPS", "mode": "double", "enabled": true }, … 32 ],
+  "tap_dance": [ { "tap": "NO", "secondary": "CAPS", "mode": "double", "enabled": true,
+                   "tapping_term": 0, "permissive_hold": null }, … 32 ],
   "combos": [ { "keys": ["A","B","NO","NO"], "output": "ESC", "enabled": true }, … 16 ],
   "key_overrides": [ { "trigger": "1", "replacement": "F1", "trigger_mods": ["LSft"],
                       "suppressed_mods": [], "negative_mods": [], "layers": [0,2],
@@ -124,6 +129,9 @@ Keycodes are names (e.g. `SCLN`, `COLN`, `F12`, `TD5`, `S(SCLN)`, `MT(LSft,A)`, 
 `OSM(LSft)`, `OSL(1)`, `MOD(LCtl,A)`, or raw `0x….`); modifier lists use `LCtl`,`LSft`,`LAlt`,
 `LGui`,`RCtl`,`RSft`,`RAlt`,`RGui`; colors are `#rrggbb`. Loading writes only values that differ
 from the live config (minimizes EEPROM writes).
+
+**`tap_dance` timing fields:** `tapping_term: 0` means inherit global; `permissive_hold: null` means
+no override (fall through to global `flags.permissive_hold`); `true`/`false` overrides for that slot.
 
 **Stock firmware + `keymap`:** the firmware ships **stock** — a normal keymap (no tap-dance
 assignments) and all tap-dance slots blank/disabled. Personal key→`TD` assignments live only in

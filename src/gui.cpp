@@ -14,6 +14,11 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
+#ifdef _WIN32
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#include <dwmapi.h>  // DwmSetWindowAttribute — rounded window corners (Win11)
+#endif
 #include <nfd.hpp>
 #include <algorithm>
 #include <cstdio>
@@ -162,10 +167,15 @@ static bool KcPicker(const char* id, uint16_t& kc) {
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(540, 380), ImGuiCond_Appearing);
+    // Round this popup's corners. Global PopupRounding is forced to 0 for viewports
+    // (so edge-spawned dropdowns don't show desktop in rounded corners); this popup
+    // always fits centered inside the main window, so rounding it is safe.
+    ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 8.0f);
     if (ImGui::BeginPopup(id)) {
         changed = KcPickerBody(kc);
         ImGui::EndPopup();
     }
+    ImGui::PopStyleVar();
     return changed;
 }
 
@@ -321,6 +331,7 @@ static void drawKeyboard() {
         ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
         ImGui::SetNextWindowSize(ImVec2(540, 380), ImGuiCond_Appearing);
     }
+    ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 8.0f);  // see note in KcPicker
     if (ImGui::BeginPopup("Key Editor")) {
         ImGui::Text("R%d C%d  (layer %d)  —  %s",
                     g_editorRow, g_editorCol, g_layer, nameOf(g_editorKc).c_str());
@@ -332,6 +343,7 @@ static void drawKeyboard() {
         }
         ImGui::EndPopup();
     }
+    ImGui::PopStyleVar();
 
     // Debounce settings — shown below the keyboard
     ImGui::SeparatorText("Debounce");
@@ -377,17 +389,34 @@ static void drawKeyboard() {
 // ── tap-dance panel ───────────────────────────────────────────────────────────
 static void drawTapDance() {
     ImGui::SeparatorText("Tap Dance Slots");
-    ImGui::TextDisabled("Disabled slots act as their plain tap key. A slot only affects a key assigned TDn.");
+    ImGui::TextDisabled("Disabled slots act as their plain tap key. Tap term 0 = inherit global. PH overrides permissive hold for that slot.");
 
     int n = g_showAllTd ? TD_SLOT_COUNT : 8;
-    if (ImGui::BeginTable("td", 6,
-            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-        ImGui::TableSetupColumn("#",         ImGuiTableColumnFlags_WidthFixed,   30);
-        ImGui::TableSetupColumn("Name",      ImGuiTableColumnFlags_WidthFixed,   60);
-        ImGui::TableSetupColumn("Tap",       ImGuiTableColumnFlags_WidthFixed,  170);
-        ImGui::TableSetupColumn("Secondary", ImGuiTableColumnFlags_WidthFixed,  170);
-        ImGui::TableSetupColumn("Mode",      ImGuiTableColumnFlags_WidthFixed,  100);
-        ImGui::TableSetupColumn("Enabled",   ImGuiTableColumnFlags_WidthFixed,   60);
+    // Size the table to its content: a ScrollX table with outer_size.y==0 fills all
+    // available vertical space, leaving empty rows + a scrollbar below the data.
+    // A data row is frame-height + cell padding; the header is plain text + cell
+    // padding (no frame). Only reserve the horizontal scrollbar when the fixed
+    // columns actually overflow the available width, else it becomes dead space.
+    const ImGuiStyle& st = ImGui::GetStyle();
+    const float headerH = ImGui::GetTextLineHeight() + st.CellPadding.y * 2.0f;
+    const float rowH    = ImGui::GetFrameHeight()    + st.CellPadding.y * 2.0f;
+    const float colsW   = (28 + 50 + 145 + 145 + 95 + 68 + 95 + 52)
+                        + st.CellPadding.x * 2.0f * 8;   // inner cell padding, 8 cols
+    float tdH = headerH + rowH * n + 2.0f;               // rows + outer borders
+    if (ImGui::GetContentRegionAvail().x < colsW + 4.0f)
+        tdH += st.ScrollbarSize;
+    const ImVec2 tdOuter(0.0f, tdH);
+    if (ImGui::BeginTable("td", 8,
+            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollX,
+            tdOuter)) {
+        ImGui::TableSetupColumn("#",         ImGuiTableColumnFlags_WidthFixed,  28);
+        ImGui::TableSetupColumn("Name",      ImGuiTableColumnFlags_WidthFixed,  50);
+        ImGui::TableSetupColumn("Tap",       ImGuiTableColumnFlags_WidthFixed, 145);
+        ImGui::TableSetupColumn("Secondary", ImGuiTableColumnFlags_WidthFixed, 145);
+        ImGui::TableSetupColumn("Mode",      ImGuiTableColumnFlags_WidthFixed,  95);
+        ImGui::TableSetupColumn("Tap term",  ImGuiTableColumnFlags_WidthFixed,  68);
+        ImGui::TableSetupColumn("PH",        ImGuiTableColumnFlags_WidthFixed,  95);
+        ImGui::TableSetupColumn("Enabled",   ImGuiTableColumnFlags_WidthFixed,  52);
         ImGui::TableHeadersRow();
 
         for (int i = 0; i < n; i++) {
@@ -421,6 +450,28 @@ static void drawTapDance() {
             }
 
             ImGui::TableSetColumnIndex(5);
+            ImGui::SetNextItemWidth(-1);
+            int tt = (int)g_td[i].tappingTerm;
+            if (ImGui::InputInt("##tt", &tt, 0, 0)) {
+                if (tt < 0) tt = 0; if (tt > 5000) tt = 5000;
+                g_td[i].tappingTerm = (uint16_t)tt;
+                try { setTdTiming(g_dev, i, g_td[i].tappingTerm, g_td[i].phFlags); } catch (...) {}
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("0 = use global tapping term");
+
+            ImGui::TableSetColumnIndex(6);
+            ImGui::SetNextItemWidth(-1);
+            const char* phLabels[] = {"Global","On","Off"};
+            int phMode = (g_td[i].phFlags & TD_HAS_PH)
+                         ? ((g_td[i].phFlags & TD_PH_VALUE) ? 1 : 2) : 0;
+            if (ImGui::Combo("##ph", &phMode, phLabels, 3)) {
+                if      (phMode == 0) g_td[i].phFlags = 0;
+                else if (phMode == 1) g_td[i].phFlags = TD_HAS_PH | TD_PH_VALUE;
+                else                  g_td[i].phFlags = TD_HAS_PH;
+                try { setTdTiming(g_dev, i, g_td[i].tappingTerm, g_td[i].phFlags); } catch (...) {}
+            }
+
+            ImGui::TableSetColumnIndex(7);
             bool en = g_td[i].enabled;
             if (ImGui::Checkbox("##en", &en)) {
                 g_td[i].enabled = en;
@@ -873,8 +924,18 @@ int gui_main() {
 #endif
     // Height accounts for the custom title bar + content margins (the OS frame
     // used to sit outside the client area; ours lives inside it).
-    GLFWwindow* win = glfwCreateWindow(800, 728, "Keychron Q1 Pro Config", nullptr, nullptr);
+    GLFWwindow* win = glfwCreateWindow(900, 800, "Keychron Q1 Pro Config", nullptr, nullptr);
     if (!win) { glfwTerminate(); return 1; }
+#ifdef _WIN32
+    // Round the borderless window's corners (Windows 11; harmless no-op on Win10).
+    // GLFW_DECORATED is off, so DWM won't round it automatically — opt in explicitly.
+    {
+        HWND hwnd = glfwGetWin32Window(win);
+        DWORD pref = 2 /* DWMWCP_ROUND */;
+        DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */,
+                              &pref, sizeof(pref));
+    }
+#endif
     centerWindowOnCursorMonitor(win);
     glfwShowWindow(win);
     glfwMakeContextCurrent(win);
@@ -1070,6 +1131,18 @@ int gui_main() {
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
             GLFWwindow* backup = glfwGetCurrentContext();
             ImGui::UpdatePlatformWindows();
+#ifdef _WIN32
+            // ImGui forces square corners on viewport-owned OS windows (the picker
+            // popups). Round them via DWM, same as the main window (Win11; no-op on 10).
+            for (ImGuiViewport* vp : ImGui::GetPlatformIO().Viewports) {
+                if (vp->PlatformHandleRaw) {
+                    DWORD pref = 2 /* DWMWCP_ROUND */;
+                    DwmSetWindowAttribute((HWND)vp->PlatformHandleRaw,
+                                          33 /* DWMWA_WINDOW_CORNER_PREFERENCE */,
+                                          &pref, sizeof(pref));
+                }
+            }
+#endif
             ImGui::RenderPlatformWindowsDefault();
             glfwMakeContextCurrent(backup);
         }

@@ -92,6 +92,8 @@ GET_GLOBAL, SET_TT, SET_TD_EN, SET_TD_MODE, RESET, GET_TD, SET_TD_KC, IDENTIFY =
 GET_FEATURES, SET_FLAG, SET_PARAM = 0x09, 0x0A, 0x0B
 GET_INDICATOR, SET_INDICATOR = 0x0C, 0x0D
 GET_COMBO, SET_COMBO, GET_KO, SET_KO = 0x0E, 0x0F, 0x10, 0x11
+SET_TD_TIMING = 0x14
+TD_PH_VALUE, TD_HAS_PH = 0x01, 0x02
 # feature_flags bit positions (must match keymap.c FF_* )
 FF_CAPS_WORD, FF_PERMISSIVE, FF_HOKP, FF_RETRO, FF_AUTOSHIFT = 0, 1, 2, 3, 4
 FF_CW_DOUBLE_SHIFT, FF_CW_BOTH_SHIFTS = 5, 6
@@ -280,8 +282,12 @@ def show_slot(h, i):
     sec = r[5] | (r[6] << 8)
     en = "on " if r[7] else "off"
     mode = "hold  " if r[8] else "double"
+    tt = r[9] | (r[10] << 8)
+    ph_flags = r[11]
+    tt_str = f"{tt}ms" if tt else "global"
+    ph_str = ("On" if ph_flags & TD_PH_VALUE else "Off") if ph_flags & TD_HAS_PH else "global"
     print(f"  [{i}] {TD_NAMES[i]:<9} tap={name_of(tap):<6} "
-          f"secondary={name_of(sec):<6} mode={mode} enabled={en}")
+          f"secondary={name_of(sec):<6} mode={mode} enabled={en} tt={tt_str} ph={ph_str}")
 
 
 def set_flag(h, bit, val):
@@ -388,6 +394,17 @@ def set_ko(h, i, k):
              1 if k["enabled"] else 0])
 
 
+def set_td_timing(h, i, tt, ph):
+    """Set per-slot tapping term and permissive hold. ph: None=global, True/False=override."""
+    flags = 0
+    if ph is not None:
+        flags |= TD_HAS_PH
+        if ph:
+            flags |= TD_PH_VALUE
+    tt = int(tt)
+    send(h, [CMD, SET_TD_TIMING, i, tt & 0xFF, (tt >> 8) & 0xFF, flags])
+
+
 def show_combo(h, i):
     c = get_combo(h, i)
     keys = " ".join(name_of(x) for x in c["keys"])
@@ -425,11 +442,15 @@ def read_config(h):
     }
     for i in range(TD_SLOT_COUNT):
         r = send(h, [CMD, GET_TD, i])
+        ph_flags = r[11]
+        ph = (bool(ph_flags & TD_PH_VALUE) if ph_flags & TD_HAS_PH else None)
         preset["tap_dance"].append({
             "tap": name_of(r[3] | (r[4] << 8)),
             "secondary": name_of(r[5] | (r[6] << 8)),
             "mode": "hold" if r[8] else "double",
             "enabled": bool(r[7]),
+            "tapping_term": r[9] | (r[10] << 8),
+            "permissive_hold": ph,
         })
     for i in range(COMBO_SLOT_COUNT):
         c = get_combo(h, i)
@@ -498,6 +519,11 @@ def write_config(h, preset):
             send(h, [CMD, SET_TD_MODE, i, 1 if td["mode"] == "hold" else 0])
         if chg("en", c["enabled"], td["enabled"]):
             send(h, [CMD, SET_TD_EN, i, 1 if td["enabled"] else 0])
+        want_tt = td.get("tapping_term", 0)
+        want_ph = td.get("permissive_hold", None)
+        if c.get("tapping_term", 0) != want_tt or c.get("permissive_hold", None) != want_ph:
+            n += 1
+            set_td_timing(h, i, want_tt, want_ph)
     for i, cb in enumerate(preset.get("combos", [])[:COMBO_SLOT_COUNT]):
         if cur["combos"][i] != cb:
             n += 1
@@ -566,7 +592,7 @@ def main():
         count = r[4]
         enabled = int.from_bytes(bytes(r[5:13]), "little")
         mode = int.from_bytes(bytes(r[13:21]), "little")
-        print(f"tapping_term={r[2] | (r[3] << 8)}  slots={count}")
+        print(f"tapping_term={r[2] | (r[3] << 8)}  slots={count}  combos={r[21]}  ko={r[22]}")
         print(f"td_enabled=0x{enabled:016X}  td_mode=0x{mode:016X}")
     elif op == "tt":
         r = send(h, [CMD, SET_TT, int(a[1]) & 0xFF, (int(a[1]) >> 8) & 0xFF])
