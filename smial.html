@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smial</title>
+<style>
+  :root { --u: 42px; --bg:#1e1f24; --panel:#2a2c33; --key:#3a3d46; --key2:#4a4e59;
+          --accent:#36c; --text:#e6e6e6; --muted:#9aa0ab; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.4 system-ui,Segoe UI,sans-serif; background:var(--bg);
+         color:var(--text); padding:16px 20px 60px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  h2 { font-size:15px; margin:22px 0 8px; color:var(--muted); text-transform:uppercase;
+       letter-spacing:.06em; border-bottom:1px solid #3a3d46; padding-bottom:4px; }
+  button { background:var(--key); color:var(--text); border:1px solid #555; border-radius:6px;
+           padding:6px 12px; cursor:pointer; font-size:13px; }
+  button:hover { background:var(--key2); }
+  button.primary { background:var(--accent); border-color:#258; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  #bar { position:sticky; top:0; background:var(--bg); padding:8px 0; z-index:20;
+         display:flex; gap:12px; align-items:center; border-bottom:1px solid #3a3d46; }
+  #status { color:var(--muted); }
+  .panel { background:var(--panel); border-radius:8px; padding:12px 14px; margin-bottom:8px; }
+  /* keyboard */
+  #kb { position:relative; margin:10px 0; }
+  .key { position:absolute; background:var(--key); border:1px solid #20222a; border-radius:5px;
+         font-size:10px; color:#cdd2db; display:flex; align-items:center; justify-content:center;
+         text-align:center; overflow:hidden; cursor:pointer; user-select:none; padding:1px; }
+  .key:hover { background:var(--key2); outline:1px solid var(--accent); }
+  .key.hl { background:#c3a300; color:#000; }
+  .layers { display:inline-flex; gap:4px; }
+  .layers button.on { background:var(--accent); border-color:#258; color:#fff; }
+  /* tables */
+  table { border-collapse:collapse; width:100%; }
+  #tdtable { width:auto; }
+  th,td { padding:3px 6px; text-align:left; border-bottom:1px solid #34373f; font-size:13px; }
+  th { color:var(--muted); font-weight:600; }
+  select,input[type=number],input[type=text] { background:#23252b; color:var(--text);
+         border:1px solid #555; border-radius:4px; padding:3px 5px; font-size:12px; }
+  input[type=range] { vertical-align:middle; width:200px; }
+  .row { display:flex; gap:14px; align-items:center; margin:6px 0; flex-wrap:wrap; }
+  .row label { min-width:150px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; }
+  .kcfield { width:100%; text-align:left; padding:4px 6px; font-size:12px; }
+  .hint { color:var(--muted); font-size:12px; }
+  .pillrow { display:flex; gap:6px; flex-wrap:wrap; }
+  /* feature toggles: checkbox on the left, label after — keeps boxes aligned */
+  .check { display:flex; align-items:center; gap:8px; margin:6px 0; cursor:pointer; }
+  .check input { flex:0 0 auto; margin:0; }
+  /* tabs */
+  #tabbar { display:flex; gap:4px; flex-wrap:wrap; margin:16px 0 0; border-bottom:1px solid #3a3d46; }
+  #tabbar button { border-radius:6px 6px 0 0; padding:7px 14px; }
+  #tabbar button.on { background:var(--accent); border-color:#258; }
+  .tabpanel { display:none; }
+  .tabpanel.on { display:block; }
+  .tabpanel h2:first-child { margin-top:14px; }
+  /* keycode picker modal */
+  #kcpicker { position:fixed; inset:0; background:#000a; z-index:100; display:none;
+              align-items:center; justify-content:center; }
+  #kcpicker.show { display:flex; }
+  #scopepicker { position:fixed; inset:0; background:#000a; z-index:101; display:none;
+                 align-items:center; justify-content:center; }
+  #scopepicker.show { display:flex; }
+  #scopepanel { background:var(--panel); border:1px solid #666; border-radius:10px;
+                box-shadow:0 12px 40px #000c; max-width:94vw; max-height:88vh;
+                display:flex; flex-direction:column; overflow:auto; padding:12px 14px; }
+  #scopehead { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  #scopehead .title { font-size:13px; color:var(--muted); flex:1; }
+  #scopekb { position:relative; margin:8px 0; }
+  #scopekb .key.sel { color:#000; }
+  #scopemodes { display:inline-flex; gap:4px; }
+  #scopemodes button.on { background:var(--accent); border-color:#258; color:#fff; }
+  .scopebtn { font-size:11px; padding:2px 8px; }
+  #kcpanel { background:var(--panel); border:1px solid #666; border-radius:10px;
+             box-shadow:0 12px 40px #000c; width:560px; max-width:92vw; max-height:80vh;
+             display:flex; flex-direction:column; overflow:hidden; }
+  #kchead { display:flex; align-items:center; gap:10px; padding:8px 12px;
+            border-bottom:1px solid #3a3d46; }
+  #kchead .title { font-size:13px; color:var(--muted); }
+  #kcfilter { flex:1; min-width:120px; }
+  #kctabs { display:flex; gap:4px; flex-wrap:wrap; padding:8px 12px 0; }
+  #kctabs button { padding:4px 10px; font-size:12px; border-radius:6px 6px 0 0; }
+  #kctabs button.on { background:var(--accent); border-color:#258; }
+  #kcgrid { padding:10px 12px; overflow-y:auto; display:flex; flex-wrap:wrap;
+            gap:5px; align-content:flex-start; }
+  #kcgrid button { padding:5px 8px; font-size:12px; }
+  #kcgrid button.cur { background:var(--accent); border-color:#258; }
+</style>
+</head>
+<body>
+<h1>Smial — Keychron runtime config <span style="font-size:12px;color:#9aa0ab;font-weight:normal">build 2026-06-23</span></h1>
+<div class="hint">WebHID (Chrome/Edge). Serve over http://localhost — <code>file://</code> won't work.</div>
+
+<div id="bar">
+  <button id="connect" class="primary">Connect</button>
+  <button id="demo">Try Demo</button>
+  <span id="status">Not connected.</span>
+</div>
+
+<div id="app" style="display:none">
+
+  <div id="demobanner" style="display:none; background:#5a3a00; color:#ffd080; border-radius:6px;
+       padding:8px 12px; margin-bottom:12px; font-size:13px;">
+    Demo mode — no keyboard connected. Interactions are reflected in the UI but not saved.
+    <button id="exitdemo" style="margin-left:12px; font-size:12px;">Exit Demo</button>
+  </div>
+
+  <div id="tabbar">
+    <button data-tab="keyboard" class="on">Keyboard</button>
+    <button data-tab="features">Features</button>
+    <button data-tab="tapdance">Tap Dance</button>
+    <button data-tab="timing">Timing</button>
+    <button data-tab="combos">Combos</button>
+    <button data-tab="overrides">Key Overrides</button>
+    <button data-tab="indicators">Indicators</button>
+    <button data-tab="lighting">Lighting</button>
+    <button data-tab="macros">Macros</button>
+  </div>
+
+  <div class="tabpanel on" data-tab="keyboard">
+    <h2>Keyboard</h2>
+    <div class="panel">
+      <div class="row">
+        <span>Layer:</span>
+        <span class="layers" id="layers"></span>
+        <button id="identify">Identify a key</button>
+        <span class="hint" id="kbhint">Click a key to change it.</span>
+      </div>
+      <div id="kb"></div>
+    </div>
+
+    <h2>Debounce</h2>
+    <div class="panel" id="debounce"></div>
+  </div>
+
+  <div class="tabpanel" data-tab="features">
+    <h2>Features</h2>
+    <div class="panel" id="features"></div>
+  </div>
+
+  <div class="tabpanel" data-tab="tapdance">
+    <h2>Tap dance slots</h2>
+    <div class="panel">
+      <div class="hint" style="margin-bottom:6px">Disabled slots act as their plain "tap" key.
+        A slot only affects a physical key if that key is assigned <code>TDn</code> above.</div>
+      <table id="tdtable"><thead><tr>
+        <th>#</th><th>name</th><th>tap</th><th>secondary</th><th>mode</th><th>tap term</th><th>PH</th><th>enabled</th>
+      </tr></thead><tbody></tbody></table>
+      <div class="hint" style="margin-top:6px"><button id="showall">Show all 32 slots</button></div>
+    </div>
+  </div>
+
+  <div class="tabpanel" data-tab="timing">
+    <h2>Timing</h2>
+    <div class="panel" id="timing"></div>
+  </div>
+
+  <div class="tabpanel" data-tab="combos">
+    <h2>Combos</h2>
+    <div class="panel">
+      <div class="hint" style="margin-bottom:6px">Press all input keys together to emit the output. Needs at least two inputs.</div>
+      <table id="combotable"><thead><tr>
+        <th>#</th><th>key 1</th><th>key 2</th><th>key 3</th><th>key 4</th><th>output</th><th>on</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="tabpanel" data-tab="overrides">
+    <h2>Key overrides</h2>
+    <div class="panel">
+      <div class="hint" style="margin-bottom:6px">When trigger + trigger-mods are held (and negative-mods are not), send replacement instead.</div>
+      <table id="kotable"><thead><tr>
+        <th>#</th><th>trigger</th><th>replacement</th><th>trigger mods</th><th>layers</th><th>on</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="tabpanel" data-tab="indicators">
+    <h2>Indicators</h2>
+    <div class="panel" id="indicators"></div>
+  </div>
+
+  <div class="tabpanel" data-tab="lighting">
+    <h2>Lighting</h2>
+    <div class="panel" id="lighting"></div>
+  </div>
+
+  <div class="tabpanel" data-tab="macros">
+    <h2>Macros</h2>
+    <div class="panel" id="macros"></div>
+  </div>
+
+  <h2>Presets</h2>
+  <div class="panel row">
+    <button id="savep" class="primary">Save preset…</button>
+    <button id="loadp">Load preset…</button>
+    <button id="rcfg">Reset config</button>
+    <button id="rkm">Reset keymap</button>
+  </div>
+  <div class="hint panel" style="margin-top:0">
+    Save downloads a <code>.json</code> snapshot; Load applies one (writing only what differs).
+    Same files work with <code>q1config.py save/load</code> (e.g. pick <code>presets/mine.json</code>).
+    Reset config = features/tap-dance/indicators; Reset keymap = key assignments.
+  </div>
+
+</div>
+
+<div id="kcpicker"><div id="kcpanel">
+  <div id="kchead"><span class="title"></span>
+    <input id="kcfilter" type="text" placeholder="filter (e.g. vol, rgb, td)" autocomplete="off">
+    <button id="kccancel">Cancel</button></div>
+  <div id="kctabs"></div>
+  <div id="kcgrid"></div>
+</div></div>
+
+<div id="scopepicker"><div id="scopepanel">
+  <div id="scopehead"><span class="title"></span>
+    <span id="scopemodes"></span>
+    <button id="scopedone">Done</button></div>
+  <div id="scopekb"></div>
+</div></div>
+
+<script>
+//// ---- keycode tables (mirror q1config.py) ----
+const KC = { NO:0x00, TRNS:0x01 };
+"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach((c,i)=>KC[c]=0x04+i);
+"123456789".split("").forEach((c,i)=>KC[c]=0x1E+i); KC["0"]=0x27;
+Object.assign(KC,{ENT:0x28,ESC:0x29,BSPC:0x2A,TAB:0x2B,SPC:0x2C,MINS:0x2D,EQL:0x2E,
+  LBRC:0x2F,RBRC:0x30,BSLS:0x31,SCLN:0x33,QUOT:0x34,GRV:0x35,COMM:0x36,DOT:0x37,SLSH:0x38,
+  CAPS:0x39,PSCR:0x46,SCRL:0x47,PAUS:0x48,INS:0x49,HOME:0x4A,PGUP:0x4B,DEL:0x4C,END:0x4D,
+  PGDN:0x4E,RGHT:0x4F,LEFT:0x50,DOWN:0x51,UP:0x52,NUM:0x53});
+for(let i=1;i<=12;i++)KC["F"+i]=0x3A+(i-1);
+for(let i=13;i<=24;i++)KC["F"+i]=0x68+(i-13);
+Object.assign(KC,{COLN:0x0233,EXLM:0x021E,AT:0x021F,HASH:0x0220,DLR:0x0221,PERC:0x0222,
+  CIRC:0x0223,AMPR:0x0224,ASTR:0x0225,LPRN:0x0226,RPRN:0x0227,UNDS:0x022D,PLUS:0x022E,
+  LCBR:0x022F,RCBR:0x0230,PIPE:0x0231,DQUO:0x0234,TILD:0x0235,LT:0x0236,GT:0x0237,QUES:0x0238});
+Object.assign(KC,{CW_TOGG:0x7C73,QK_LOCK:0x7C59,AS_DOWN:0x7C10,AS_UP:0x7C11,AS_RPT:0x7C12,
+  AS_ON:0x7C13,AS_OFF:0x7C14,AS_TOGG:0x7C15,QK_BOOT:0x7C00});
+// Modifiers
+Object.assign(KC,{LCTL:0xE0,LSFT:0xE1,LALT:0xE2,LGUI:0xE3,RCTL:0xE4,RSFT:0xE5,RALT:0xE6,RGUI:0xE7});
+// Media / consumer / system (knob press defaults to MUTE = 0xA8)
+Object.assign(KC,{PWR:0xA5,SLEP:0xA6,WAKE:0xA7,MUTE:0xA8,VOLU:0xA9,VOLD:0xAA,
+  MNXT:0xAB,MPRV:0xAC,MSTP:0xAD,MPLY:0xAE,MSEL:0xAF,EJCT:0xB0,MAIL:0xB1,CALC:0xB2,MYCM:0xB3,
+  WSCH:0xB4,WHOM:0xB5,WBAK:0xB6,WFWD:0xB7,WSTP:0xB8,WREF:0xB9,WFAV:0xBA,
+  MFFD:0xBB,MRWD:0xBC,BRIU:0xBD,BRID:0xBE,CPNL:0xBF,ASST:0xC0,MCTL:0xC1,LPAD:0xC2});
+// RGB matrix controls (QK_RGB range, 0x7820)
+Object.assign(KC,{RGB_TOG:0x7820,RGB_MOD:0x7821,RGB_RMOD:0x7822,RGB_HUI:0x7823,RGB_HUD:0x7824,
+  RGB_SAI:0x7825,RGB_SAD:0x7826,RGB_VAI:0x7827,RGB_VAD:0x7828,RGB_SPI:0x7829,RGB_SPD:0x782A});
+// Magic: toggle N-key rollover (Keychron Fn+N)
+Object.assign(KC,{NK_TOGG:0x7013});
+// Keychron vendor custom keycodes (QK_KB range, 0x7E00) — names match VIA
+["LOpt","ROpt","LCmd","RCmd","MCtrl","LPad","Task","File","SShot","Cortana","Siri","BT1","BT2","BT3","Batt"]
+  .forEach((n,i)=>{ KC[n]=0x7E00+i; });
+// Layer-switch keycodes (stride 0x20, layer in low bits); first 8 for the picker
+for(let l=0;l<8;l++){ KC["TO("+l+")"]=0x5200|l; KC["MO("+l+")"]=0x5220|l;
+  KC["DF("+l+")"]=0x5240|l; KC["TG("+l+")"]=0x5260|l; }
+// One-shot keycodes for the picker (the Build forms / nameOf cover the full range)
+for(let i=0;i<4;i++) KC["OSM("+["LCTL","LSFT","LALT","LGUI"][i]+")"]=0x52A0|(1<<i);
+for(let l=0;l<8;l++) KC["OSL("+l+")"]=0x5280|l;
+for(let i=0;i<32;i++)KC["TD"+i]=0x5700|i;
+// QMK keycode-range bases for MT/LT/OSM/modded forms.
+const QK_MODS=0x0100, QK_MOD_TAP=0x2000, QK_LAYER_TAP=0x4000, QK_OSM=0x52A0, QK_MACRO=0x7700;
+// 8-bit modifier-mask bit names for key-override mods (QMK MOD_* order).
+const MOD_MASK_NAMES=["LCtl","LSft","LAlt","LGui","RCtl","RSft","RAlt","RGui"];
+// 5-bit packed mod field (bits 0-3 CSAG, bit4 right) <-> "+"-joined tokens.
+function mods5ToStr(m){ const s=(m&0x10)?["RCtl","RSft","RAlt","RGui"]:["LCtl","LSft","LAlt","LGui"];
+  const o=[]; for(let i=0;i<4;i++) if(m&(1<<i)) o.push(s[i]); return o.length?o.join("+"):"0"; }
+function mods5FromStr(str){ if(!str||str==="0") return 0; let m=0;
+  for(const tok of str.split("+")){ const t=tok.trim().toUpperCase(); if(!t) continue;
+    const right=t[0]==="R"; const bit={CTL:0,SFT:1,ALT:2,GUI:3}[t.slice(1)];
+    if(bit===undefined) throw new Error("Unknown modifier: "+tok);
+    m|=(1<<bit)|(right?0x10:0); } return m; }
+function maskToList(mask){ const o=[]; for(let b=0;b<8;b++) if(mask&(1<<b)) o.push(MOD_MASK_NAMES[b]); return o; }
+function listToMask(arr){ let m=0; for(const nm of arr||[]){ const i=MOD_MASK_NAMES.indexOf(nm); if(i>=0) m|=1<<i; } return m; }
+const ENTRIES=[]; const seenCode=new Set();
+for(const [n,c] of Object.entries(KC)){ if(seenCode.has(c))continue; seenCode.add(c); ENTRIES.push([n,c]); }
+function nameOf(code){ if(code>=0x5700&&code<=0x57FF) return "TD"+(code&0xFF);
+  if(code>=QK_MACRO&&code<=QK_MACRO+0xFF) return "MACRO"+(code&0xFF);
+  switch(code&0xFFE0){
+    case 0x5200: return "TO("+(code&0x1F)+")";
+    case 0x5220: return "MO("+(code&0x1F)+")";
+    case 0x5240: return "DF("+(code&0x1F)+")";
+    case 0x5260: return "TG("+(code&0x1F)+")";
+    case 0x5280: return "OSL("+(code&0x1F)+")";
+    case 0x52A0: return "OSM("+mods5ToStr(code&0x1F)+")";
+    case 0x52C0: return "TT("+(code&0x1F)+")"; }
+  for(const [n,c] of ENTRIES) if(c===code) return n;
+  if(code>=QK_MOD_TAP&&code<=0x3FFF) return "MT("+mods5ToStr((code>>8)&0x1F)+","+nameOf(code&0xFF)+")";
+  if(code>=QK_LAYER_TAP&&code<=0x4FFF) return "LT("+((code>>8)&0xF)+","+nameOf(code&0xFF)+")";
+  if(code>=QK_MODS&&code<=0x1FFF) return "MOD("+mods5ToStr((code>>8)&0x1F)+","+nameOf(code&0xFF)+")";
+  return "0x"+code.toString(16).padStart(4,"0").toUpperCase(); }
+// Human-readable descriptions; mirrors descOf() in src/keycodes.cpp.
+const KC_DESC={
+  0x0000:"No key (blocked)",         0x0001:"Transparent (pass-through)",
+  0x0028:"Enter",   0x0029:"Escape",  0x002A:"Backspace", 0x002B:"Tab",
+  0x002C:"Space",   0x0039:"Caps Lock",
+  0x0046:"Print Screen", 0x0047:"Scroll Lock", 0x0048:"Pause/Break",
+  0x0049:"Insert",  0x004A:"Home",   0x004B:"Page Up",
+  0x004C:"Delete",  0x004D:"End",    0x004E:"Page Down",
+  0x004F:"Right Arrow", 0x0050:"Left Arrow", 0x0051:"Down Arrow",
+  0x0052:"Up Arrow", 0x0053:"Num Lock",
+  // Symbols — basic
+  0x002D:"- (Minus)",     0x002E:"= (Equals)",      0x002F:"[ (Left Bracket)",
+  0x0030:"] (Right Bracket)", 0x0031:"\\ (Backslash)", 0x0033:"; (Semicolon)",
+  0x0034:"' (Single Quote)", 0x0035:"` (Grave/Backtick)", 0x0036:", (Comma)",
+  0x0037:". (Period)",    0x0038:"/ (Slash)",
+  // Symbols — shifted (modded aliases)
+  0x0233:": (Colon)",    0x021E:"! (Exclamation)", 0x021F:"@ (At)",
+  0x0220:"# (Hash)",     0x0221:"$ (Dollar)",      0x0222:"% (Percent)",
+  0x0223:"^ (Caret)",    0x0224:"& (Ampersand)",   0x0225:"* (Asterisk)",
+  0x0226:"( (Left Paren)", 0x0227:") (Right Paren)", 0x022D:"_ (Underscore)",
+  0x022E:"+ (Plus)",     0x022F:"{ (Left Brace)",  0x0230:"} (Right Brace)",
+  0x0231:"| (Pipe)",     0x0234:'\" (Double Quote)', 0x0235:"~ (Tilde)",
+  0x0236:"< (Less Than)", 0x0237:"> (Greater Than)", 0x0238:"? (Question Mark)",
+  // Modifiers
+  0x00E0:"Left Control", 0x00E1:"Left Shift",    0x00E2:"Left Alt",
+  0x00E3:"Left GUI (Win/Cmd)", 0x00E4:"Right Control", 0x00E5:"Right Shift",
+  0x00E6:"Right Alt / AltGr",  0x00E7:"Right GUI (Win/Cmd)",
+  // Media / consumer
+  0x00A5:"Power",   0x00A6:"Sleep",   0x00A7:"Wake",
+  0x00A8:"Mute",    0x00A9:"Volume Up", 0x00AA:"Volume Down",
+  0x00AB:"Next Track", 0x00AC:"Previous Track", 0x00AD:"Stop Media",
+  0x00AE:"Play/Pause", 0x00AF:"Media Select", 0x00B0:"Eject",
+  0x00B1:"Open Mail", 0x00B2:"Calculator", 0x00B3:"My Computer",
+  0x00B4:"Web Search", 0x00B5:"Web Home",  0x00B6:"Web Back",
+  0x00B7:"Web Forward", 0x00B8:"Web Stop", 0x00B9:"Web Refresh",
+  0x00BA:"Web Favorites", 0x00BB:"Fast Forward", 0x00BC:"Rewind",
+  0x00BD:"Brightness Up", 0x00BE:"Brightness Down",
+  0x00BF:"Control Panel", 0x00C0:"Assistant",
+  0x00C1:"Mission Control", 0x00C2:"Launchpad",
+  // RGB lighting
+  0x7820:"RGB Toggle",       0x7821:"RGB Mode +",     0x7822:"RGB Mode -",
+  0x7823:"RGB Hue +",        0x7824:"RGB Hue -",
+  0x7825:"RGB Saturation +", 0x7826:"RGB Saturation -",
+  0x7827:"RGB Brightness +", 0x7828:"RGB Brightness -",
+  0x7829:"RGB Speed +",      0x782A:"RGB Speed -",
+  // Special / QMK
+  0x7C73:"Caps Word Toggle",  0x7C59:"Key Lock (hold until re-pressed)",
+  0x7C00:"Enter Bootloader (DFU)", 0x7013:"N-Key Rollover Toggle",
+  0x7C13:"Auto-Shift On",    0x7C14:"Auto-Shift Off",   0x7C15:"Auto-Shift Toggle",
+  0x7C11:"Auto-Shift Timeout +", 0x7C10:"Auto-Shift Timeout -", 0x7C12:"Auto-Shift Repeat",
+  // Keychron custom (QK_KB = 0x7E00)
+  0x7E00:"Left Option (Mac)",  0x7E01:"Right Option (Mac)",
+  0x7E02:"Left Command (Mac)", 0x7E03:"Right Command (Mac)",
+  0x7E04:"Mission Control",    0x7E05:"Launchpad",
+  0x7E06:"Task View (Windows)", 0x7E07:"File Explorer",
+  0x7E08:"Screenshot", 0x7E09:"Cortana", 0x7E0A:"Siri",
+  0x7E0B:"Bluetooth 1", 0x7E0C:"Bluetooth 2", 0x7E0D:"Bluetooth 3",
+  0x7E0E:"Battery Level",
+};
+function descOf(code){
+  if(KC_DESC[code]) return KC_DESC[code];
+  if(code>=0x5700&&code<=0x57FF) return "Tap-Dance slot "+(code&0xFF);
+  if(code>=QK_MACRO&&code<=QK_MACRO+0xFF) return "Macro slot "+(code-QK_MACRO);
+  switch(code&0xFFE0){
+    case 0x5200: return "Activate Layer "   +(code&0x1F);
+    case 0x5220: return "Momentary Layer "  +(code&0x1F);
+    case 0x5240: return "Set Default Layer "+(code&0x1F);
+    case 0x5260: return "Toggle Layer "     +(code&0x1F);
+    case 0x5280: return "One-Shot Layer "   +(code&0x1F);
+    case 0x52A0: return "One-Shot Mod: "    +mods5ToStr(code&0x1F);
+    case 0x52C0: return "Tap-Toggle Layer " +(code&0x1F); }
+  if(code>=QK_MOD_TAP&&code<=0x3FFF) return "Mod-Tap: "+mods5ToStr((code>>8)&0x1F)+" / "+descOf(code&0xFF);
+  if(code>=QK_LAYER_TAP&&code<=0x4FFF) return "Layer-Tap: Layer "+((code>>8)&0xF)+" / "+descOf(code&0xFF);
+  if(code>=QK_MODS&&code<=0x1FFF) return mods5ToStr((code>>8)&0x1F)+" + "+descOf(code&0xFF);
+  return nameOf(code); }
+// VIA-style category from a keycode's value range; mirrors src/keycodes.cpp.
+function categoryOf(c){
+  if(c===0x00||c===0x01||c===0x7C73||c===0x7C59||(c>=0x7C10&&c<=0x7C15)||c===0x7C00||c===0x7013) return "Special";
+  if(c>=0x04&&c<=0x1D) return "Alpha";
+  if(c>=0xE0&&c<=0xE7) return "Mods";
+  if((c>=0x3A&&c<=0x45)||(c>=0x68&&c<=0x73)) return "Fn";
+  if((c>=0x1E&&c<=0x27)||(c>=0x2D&&c<=0x38)||(c>=0x0200&&c<=0x02FF)) return "Symbols";
+  if(c<=0x53) return "Nav";
+  if(c>=0xA5&&c<=0xC2) return "Media";
+  if(c>=0x5200&&c<=0x52FF) return "Layers";
+  if(c>=0x7820&&c<=0x782A) return "Lighting";
+  if((c>=0x5700&&c<=0x57FF)||(c>=0x7E00&&c<=0x7E0E)) return "Custom";
+  return "Special";
+}
+const KCATS=(()=>{
+  const order=["Alpha","Fn","Symbols","Nav","Mods","Media","Layers","Lighting","Special","Custom"];
+  const buckets={}; order.forEach(o=>buckets[o]=[]);
+  for(const e of ENTRIES) buckets[categoryOf(e[1])].push(e);
+  const MOD_ORD=["LCTL","LSFT","LALT","LGUI","RCTL","RSFT","RALT","RGUI"];
+  return order.map(o=>{
+    const es=buckets[o]||[];
+    if(o==="Mods") es.sort((a,b)=>MOD_ORD.indexOf(a[0])-MOD_ORD.indexOf(b[0]));
+    else if(o==="Fn"||o==="Nav") es.sort((a,b)=>a[1]-b[1]);
+    else es.sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true}));
+    return [o,es];
+  }).filter(([,es])=>es.length);
+})();
+// Modal keycode picker: tabs per category, a button grid per tab.
+// Resolves to the chosen code, or null on cancel.
+function pickKeycode(cur, title){
+  return new Promise(res=>{
+    const ov=$("#kcpicker"), tabs=$("#kctabs"), grid=$("#kcgrid"), filt=$("#kcfilter");
+    $("#kchead .title").textContent=title||"";
+    let done=false, curEntries=[];
+    const close=v=>{ if(done)return; done=true; ov.classList.remove("show");
+      ov.onclick=null; $("#kccancel").onclick=null; filt.oninput=null; res(v); };
+    const renderGrid=()=>{ const q=filt.value.toLowerCase(); grid.innerHTML="";
+      for(const [n,c] of curEntries){ if(q && !n.toLowerCase().includes(q)) continue;
+        const b=document.createElement("button"); b.textContent=n; b.title=descOf(c);
+        if(c===cur)b.className="cur"; b.onclick=()=>close(c); grid.appendChild(b); } };
+    const selectTab=(cat,btn)=>{ [...tabs.children].forEach(x=>x.className="");
+      btn.className="on"; curEntries=cat[1]; renderGrid(); };
+    tabs.innerHTML="";
+    // Append a dynamic Macro tab listing each slot's summary (mirrors the C++ Macro tab).
+    const cats=KCATS.slice();
+    if(g_macroCount>0){ const me=[];
+      for(let i=0;i<g_macroCount;i++) me.push([i+": "+summarizeMacro(g_macros[i]),QK_MACRO+i]);
+      cats.push(["Macro",me]); }
+    const curCat=cats.find(([,es])=>es.some(([,c])=>c===cur)) || cats[0];
+    cats.forEach(cat=>{ const t=document.createElement("button"); t.textContent=cat[0];
+      t.onclick=()=>selectTab(cat,t); tabs.appendChild(t);
+      if(cat===curCat){ t.className="on"; curEntries=cat[1]; } });
+    filt.value=""; renderGrid();
+    filt.oninput=renderGrid;
+    // Enter accepts a typed keycode form (e.g. MT(LSft,A), LT(1,SPC), OSM(LSft)).
+    filt.onkeydown=e=>{ if(e.key==="Enter"){ try{ close(kcParse(filt.value)); }catch(_){} } };
+    $("#kccancel").onclick=()=>close(null);
+    ov.onclick=e=>{ if(e.target===ov) close(null); };
+    ov.classList.add("show");
+    filt.focus();
+  });
+}
+// A keycode field: a button showing the current name that opens the picker.
+// onPick(code) is called when a new code is chosen.
+function kcField(code, title, onPick){
+  const b=document.createElement("button");
+  b.className="kcfield"; b.dataset.kc=code; b.textContent=nameOf(code);
+  b.onclick=async()=>{ const v=await pickKeycode(+b.dataset.kc, title);
+    if(v!=null){ b.dataset.kc=v; b.textContent=nameOf(v); onPick(v); } };
+  return b;
+}
+
+//// ---- physical layout (from ansi_knob/info.json) [row,col,x,y,w] ----
+const LAYOUT=[
+ [0,0,0,0,1],[0,1,1.25,0,1],[0,2,2.25,0,1],[0,3,3.25,0,1],[0,4,4.25,0,1],[0,5,5.5,0,1],
+ [0,6,6.5,0,1],[0,7,7.5,0,1],[0,8,8.5,0,1],[0,9,9.75,0,1],[0,10,10.75,0,1],[0,11,11.75,0,1],
+ [0,12,12.75,0,1],[0,13,14,0,1],[0,15,15.25,0,1],
+ [1,0,0,1.25,1],[1,1,1,1.25,1],[1,2,2,1.25,1],[1,3,3,1.25,1],[1,4,4,1.25,1],[1,5,5,1.25,1],
+ [1,6,6,1.25,1],[1,7,7,1.25,1],[1,8,8,1.25,1],[1,9,9,1.25,1],[1,10,10,1.25,1],[1,11,11,1.25,1],
+ [1,12,12,1.25,1],[1,13,13,1.25,2],[1,15,15.25,1.25,1],
+ [2,0,0,2.25,1.5],[2,1,1.5,2.25,1],[2,2,2.5,2.25,1],[2,3,3.5,2.25,1],[2,4,4.5,2.25,1],
+ [2,5,5.5,2.25,1],[2,6,6.5,2.25,1],[2,7,7.5,2.25,1],[2,8,8.5,2.25,1],[2,9,9.5,2.25,1],
+ [2,10,10.5,2.25,1],[2,11,11.5,2.25,1],[2,12,12.5,2.25,1],[2,13,13.5,2.25,1.5],[2,15,15.25,2.25,1],
+ [3,0,0,3.25,1.75],[3,1,1.75,3.25,1],[3,2,2.75,3.25,1],[3,3,3.75,3.25,1],[3,4,4.75,3.25,1],
+ [3,5,5.75,3.25,1],[3,6,6.75,3.25,1],[3,7,7.75,3.25,1],[3,8,8.75,3.25,1],[3,9,9.75,3.25,1],
+ [3,10,10.75,3.25,1],[3,11,11.75,3.25,1],[3,13,12.75,3.25,2.25],[3,15,15.25,3.25,1],
+ [4,0,0,4.25,2.25],[4,2,2.25,4.25,1],[4,3,3.25,4.25,1],[4,4,4.25,4.25,1],[4,5,5.25,4.25,1],
+ [4,6,6.25,4.25,1],[4,7,7.25,4.25,1],[4,8,8.25,4.25,1],[4,9,9.25,4.25,1],[4,10,10.25,4.25,1],
+ [4,11,11.25,4.25,1],[4,13,12.25,4.25,1.75],[4,14,14.25,4.5,1],
+ [5,0,0,5.25,1.25],[5,1,1.25,5.25,1.25],[5,2,2.5,5.25,1.25],[5,6,3.75,5.25,6.25],[5,10,10,5.25,1],
+ [5,11,11,5.25,1],[5,12,12,5.25,1],[5,13,13.25,5.5,1],[5,14,14.25,5.5,1],[5,15,15.25,5.5,1],
+];
+// Slots are named TD0..TD63 so a slot's name is its index (matches the firmware).
+const TD_NAMES=[]; for(let i=0;i<32;i++) TD_NAMES.push("TD"+i);
+
+//// ---- transport ----
+const CMD=0xAC;
+let device=null, pending=null, identifyResolver=null, queue=Promise.resolve();
+function onReport(e){
+  const d=new Uint8Array(e.data.buffer);
+  if(d[0]===CMD && d[1]===0x08 && identifyResolver){
+    const r=identifyResolver; identifyResolver=null; r({row:d[2],col:d[3],kc:d[4]|(d[5]<<8)}); return;
+  }
+  if(pending){ const p=pending; pending=null; p(d); }
+}
+function xfer(payload){
+  const run=()=>new Promise((resolve,reject)=>{
+    if(!device){ reject(new Error("not connected")); return; }
+    const to=setTimeout(()=>{ pending=null; reject(new Error("timeout")); },1500);
+    pending=(d)=>{ clearTimeout(to); resolve(d); };
+    const buf=new Uint8Array(32); buf.set(payload);
+    device.sendReport(0,buf).catch(err=>{ clearTimeout(to); pending=null; reject(err); });
+  });
+  queue=queue.then(run,run); return queue;
+}
+const u16=(d,o)=>d[o]|(d[o+1]<<8);
+
+// 0xAC commands
+let getGlobal =()=>xfer([CMD,0x01]).then(d=>({tt:u16(d,2),slots:d[4],comboSlots:d[21],koSlots:d[22]}));
+let setTT     =v=>xfer([CMD,0x02,v&0xff,(v>>8)&0xff]);
+let setTdEn   =(i,on)=>xfer([CMD,0x03,i,on?1:0]);
+let setTdMode =(i,m)=>xfer([CMD,0x04,i,m]);
+let resetCfg  =()=>xfer([CMD,0x05]);
+let getTd     =i=>xfer([CMD,0x06,i]).then(d=>({tap:u16(d,3),sec:u16(d,5),en:d[7],mode:d[8],tappingTerm:u16(d,9),phFlags:d[11]}));
+let setTdKc   =(i,tap,sec)=>xfer([CMD,0x07,i,tap&0xff,(tap>>8)&0xff,sec&0xff,(sec>>8)&0xff]);
+let getFeat   =()=>xfer([CMD,0x09]).then(d=>({flags:u16(d,2),quicktap:u16(d,4),astimeout:u16(d,6),cwtimeout:u16(d,8),debounce:d[10],dbmethod:d[11],oneshot:u16(d,12)}));
+let setFlag   =(bit,on)=>xfer([CMD,0x0A,bit,on?1:0]);
+let setParam  =(pid,v)=>xfer([CMD,0x0B,pid,v&0xff,(v>>8)&0xff]);
+// scope 0 board,1 keys,2 rows,3 cols; count = items in use; items: KEYS (row<<4)|col, ROWS/COLS idx.
+let getInd    =i=>xfer([CMD,0x0C,i]).then(d=>({en:d[3],r:d[4],g:d[5],b:d[6],
+                 scope:d[7],count:d[8],items:[d[9],d[10],d[11],d[12]]}));
+let setInd    =(i,en,r,g,b,scope=0,count=0,items=[0,0,0,0])=>
+                 xfer([CMD,0x0D,i,en?1:0,r,g,b,scope,count,items[0],items[1],items[2],items[3]]);
+let getCombo  =i=>xfer([CMD,0x0E,i]).then(d=>({keys:[u16(d,3),u16(d,5),u16(d,7),u16(d,9)],output:u16(d,11),enabled:!!d[13]}));
+let setCombo  =(i,c)=>xfer([CMD,0x0F,i,c.keys[0]&0xff,(c.keys[0]>>8)&0xff,c.keys[1]&0xff,(c.keys[1]>>8)&0xff,
+                              c.keys[2]&0xff,(c.keys[2]>>8)&0xff,c.keys[3]&0xff,(c.keys[3]>>8)&0xff,
+                              c.output&0xff,(c.output>>8)&0xff,c.enabled?1:0]);
+let getKo     =i=>xfer([CMD,0x10,i]).then(d=>({trigger:u16(d,3),replacement:u16(d,5),triggerMods:d[7],
+                              suppressedMods:d[8],negativeMods:d[9],layers:d[10],options:d[11],enabled:!!d[12]}));
+let setKo     =(i,k)=>xfer([CMD,0x11,i,k.trigger&0xff,(k.trigger>>8)&0xff,k.replacement&0xff,(k.replacement>>8)&0xff,
+                              k.triggerMods&0xff,k.suppressedMods&0xff,k.negativeMods&0xff,k.layers&0xff,k.options&0xff,k.enabled?1:0]);
+let setTdTiming=(i,tt,f)=>xfer([CMD,0x14,i,tt&0xff,(tt>>8)&0xff,f]);
+// VIA dynamic keymap (big-endian keycode)
+let viaGet    =(l,r,c)=>xfer([0x04,l,r,c]).then(d=>(d[4]<<8)|d[5]);
+let viaSet    =(l,r,c,kc)=>xfer([0x05,l,r,c,(kc>>8)&0xff,kc&0xff]);
+let viaKmReset=()=>xfer([0x06]);
+// VIA dynamic macros (standard VIA commands, no 0xAC channel prefix)
+let macroGetCount=()=>xfer([0x0C]).then(d=>d[1]);
+let macroGetBufSz=()=>xfer([0x0D]).then(d=>(d[1]<<8)|d[2]);
+let macroGetBuf  =async sz=>{ const buf=new Uint8Array(sz);
+  for(let off=0;off<sz;){ const n=Math.min(28,sz-off);
+    const d=await xfer([0x0E,(off>>8)&0xff,off&0xff,n]);
+    for(let i=0;i<n;i++) buf[off+i]=d[4+i]; off+=n; }
+  return buf; };
+let macroSetBuf  =async data=>{ const total=data.length;
+  for(let off=0;off<total;){ const n=Math.min(28,total-off);
+    const pkt=new Array(4+n).fill(0); pkt[0]=0x0F; pkt[1]=(off>>8)&0xff; pkt[2]=off&0xff; pkt[3]=n;
+    for(let i=0;i<n;i++) pkt[4+i]=data[off+i]; await xfer(pkt); off+=n; } };
+let macroReset   =()=>xfer([0x10]);
+
+// VIA RGB lighting (channel-based: [cmd, 0x03, value_id, data...]; reply byte 3 = first data byte).
+// Mirrors getLighting/setLight* in src/protocol.cpp.
+const VIA_RGB_CHAN=0x03, RGB_VAL_ID=0x01, RGB_MODE_ID=0x02, RGB_SPD_ID=0x03, RGB_COL_ID=0x04;
+let lightGet1   =vid=>xfer([0x08,VIA_RGB_CHAN,vid]).then(d=>d[3]);
+let getLighting =async()=>{ const c=await xfer([0x08,VIA_RGB_CHAN,RGB_COL_ID]);
+  return {mode:await lightGet1(RGB_MODE_ID), hue:c[3], sat:c[4],
+          val:await lightGet1(RGB_VAL_ID), speed:await lightGet1(RGB_SPD_ID)}; };
+let setLightMode =m=>xfer([0x07,VIA_RGB_CHAN,RGB_MODE_ID,m&0xff]);
+let setLightVal  =v=>xfer([0x07,VIA_RGB_CHAN,RGB_VAL_ID,v&0xff]);
+let setLightSpeed=s=>xfer([0x07,VIA_RGB_CHAN,RGB_SPD_ID,s&0xff]);
+let setLightColor=(h,s)=>xfer([0x07,VIA_RGB_CHAN,RGB_COL_ID,h&0xff,s&0xff]);
+let saveLighting =()=>xfer([0x09,VIA_RGB_CHAN]);
+// RGB matrix effect names (index = mode); mirrors RGB_MODE_NAMES in src/gui.cpp.
+const RGB_MODE_NAMES=["0. None","1. Solid Color","2. Breathing","3. Band Spiral Val","4. Cycle All",
+  "5. Cycle Left/Right","6. Cycle Up/Down","7. Rainbow Moving Chevron","8. Cycle Out In","9. Cycle Out In Dual",
+  "10. Cycle Pinwheel","11. Cycle Spiral","12. Dual Beacon","13. Rainbow Beacon","14. Jellybean Raindrops",
+  "15. Pixel Rain","16. Typing Heatmap","17. Digital Rain","18. Solid Reactive Simple","19. Solid Reactive Multiwide",
+  "20. Solid Reactive Multinexus","21. Splash","22. Solid Splash"];
+
+// Serialize macro step lists back into the flat buffer. Mirrors serializeMacros in src/protocol.cpp.
+function serializeMacros(macros,count,bufSize){
+  const buf=new Uint8Array(bufSize); let pos=0;
+  outer:
+  for(let m=0;m<count;m++){
+    const steps=(m<macros.length?macros[m]:[])||[];
+    for(const s of steps){
+      if(s.op==="text"){ for(const ch of s.text||""){ if(pos>=bufSize-1) break outer; buf[pos++]=ch.charCodeAt(0)&0xff; } }
+      else if(s.op==="delay"){ const ds=String(s.delay||0); if(pos+2+ds.length>=bufSize) break outer;
+        buf[pos++]=0x01; buf[pos++]=0x04; for(const c of ds) buf[pos++]=c.charCodeAt(0); buf[pos++]=0x7C; }
+      else { const code={tap:1,down:2,up:3}[s.op]; if(pos+2>=bufSize) break outer;
+        buf[pos++]=0x01; buf[pos++]=code; buf[pos++]=(s.kc||0)&0xff; }
+    }
+    if(pos>=bufSize) break outer;
+    buf[pos++]=0x00;
+  }
+  return buf;
+}
+
+// Parse the flat macro buffer into per-macro step lists. Mirrors parseMacros in
+// src/protocol.cpp: raw ASCII -> text; 0x01 prefix -> action (tap/down/up/delay); 0x00 -> end.
+let g_macros=[], g_macroCount=0, g_macroBufSz=0, g_selMacro=0;
+let g_light={mode:1,hue:0,sat:255,val:255,speed:128}, g_lightModeMax=22, g_lightOk=true;
+function parseMacros(buf,count){
+  const macros=[]; let pos=0; const n=buf.length;
+  for(let m=0;m<count;m++){
+    const steps=[]; let txt="";
+    const flush=()=>{ if(txt){ steps.push({op:"text",text:txt}); txt=""; } };
+    while(pos<n){
+      const b=buf[pos++];
+      if(b===0x00){ flush(); break; }
+      if(b===0x01){ flush(); if(pos>=n) break; const code=buf[pos++];
+        if(code===0x01||code===0x02||code===0x03){ if(pos>=n) break;
+          steps.push({op:["","tap","down","up"][code],kc:buf[pos++]}); }
+        else if(code===0x04){ let ds=""; while(pos<n&&buf[pos]!==0x7C) ds+=String.fromCharCode(buf[pos++]);
+          if(pos<n) pos++; steps.push({op:"delay",delay:ds?parseInt(ds,10):0}); }
+      } else txt+=String.fromCharCode(b);
+    }
+    flush(); macros.push(steps);
+  }
+  return macros;
+}
+// One-line summary of a macro for the picker (first few steps, elided). Mirrors gui.cpp.
+function summarizeMacro(steps){
+  if(!steps||!steps.length) return "(empty)";
+  const parts=[];
+  for(let i=0;i<steps.length&&i<3;i++){ const s=steps[i];
+    if(s.op==="text") parts.push('Text:"'+s.text+'"');
+    else if(s.op==="delay") parts.push("Delay "+s.delay);
+    else parts.push(s.op.charAt(0).toUpperCase()+s.op.slice(1)+" "+nameOf(s.kc)); }
+  let out=parts.join(" · ");
+  if(steps.length>3) out+=" …";
+  if(out.length>60) out=out.slice(0,57)+"...";
+  return out;
+}
+async function loadMacros(){
+  if(g_demo){ g_macros=(DEMO_DATA.macros||[]).map(s=>s.slice()); g_macroCount=g_macros.length; g_macroBufSz=2048; return; }
+  try{ g_macroCount=await macroGetCount();
+    if(g_macroCount>0){ g_macroBufSz=await macroGetBufSz(); g_macros=parseMacros(await macroGetBuf(g_macroBufSz),g_macroCount); }
+    else { g_macros=[]; g_macroBufSz=0; }
+  }catch(e){ g_macroCount=0; g_macros=[]; g_macroBufSz=0; }
+}
+async function applyMacros(){
+  if(g_demo) return;
+  try{ await macroSetBuf(serializeMacros(g_macros,g_macroCount,g_macroBufSz)); }catch(e){}
+}
+
+// Lighting load. Mirrors the connect-time probe in src/gui.cpp: read current state, then
+// send mode 255 (firmware clamps to the max valid effect), read it back, and restore.
+async function loadLighting(){
+  g_lightOk=true;
+  if(g_demo){ const l=DEMO_DATA.lighting||{};
+    g_light={mode:l.mode??1,hue:l.hue??0,sat:l.sat??255,val:l.val??255,speed:l.speed??128};
+    g_lightModeMax=RGB_MODE_NAMES.length-1; return; }
+  try{ g_light=await getLighting();
+    const saved=g_light.mode;
+    await setLightMode(255); g_lightModeMax=(await getLighting()).mode;
+    await setLightMode(saved); g_light.mode=saved;
+  }catch(e){ g_lightOk=false; g_lightModeMax=RGB_MODE_NAMES.length-1; }
+}
+
+const FF={CAPS_WORD:0,PERMISSIVE:1,HOKP:2,RETRO:3,AUTOSHIFT:4,CW_DOUBLE_SHIFT:5,CW_BOTH_SHIFTS:6};
+const PARAM={QUICKTAP:0,ASTIMEOUT:1,CWTIMEOUT:2,DEBOUNCE:3,DEBOUNCE_METHOD:4,ONESHOT:5};
+// debounce method index -> canonical name (must match keymap.c dispatcher order)
+const DEBOUNCE_METHODS=["none","sym_defer_g","sym_eager_pk","asym_eager_defer_pk"];
+// friendly labels for the dropdown (parallel to DEBOUNCE_METHODS; mirrors the native app)
+const DEBOUNCE_METHOD_LABELS=["None","Symmetric Defer","Symmetric Eager","Asymmetric Eager/Defer"];
+
+//// ---- demo mode data ----
+const DEMO_DATA={
+  tapping_term:200,quick_tap_term:120,autoshift_timeout:175,caps_word_timeout:5000,
+  debounce_time:5,debounce_method:"sym_defer_g",oneshot_timeout:1000,
+  flags:{caps_word:true,permissive_hold:false,hold_on_other_key:false,retro_tapping:false,
+         auto_shift:false,caps_word_double_shift:true,caps_word_both_shifts:false},
+  tap_dance:[
+    {tap:"NO",secondary:"CAPS",mode:"double",enabled:true},
+    {tap:"HOME",secondary:"END",mode:"double",enabled:true},
+    {tap:"ESC",secondary:"ESC",mode:"double",enabled:false},
+    {tap:"SCLN",secondary:"COLN",mode:"hold",enabled:true},
+    {tap:"F9",secondary:"PSCR",mode:"double",enabled:true},
+    {tap:"F10",secondary:"SCRL",mode:"double",enabled:true},
+    {tap:"F11",secondary:"PAUS",mode:"double",enabled:true},
+    {tap:"F12",secondary:"NUM",mode:"double",enabled:true},
+    ...Array(24).fill({tap:"NO",secondary:"NO",mode:"double",enabled:false})
+  ],
+  combos:Array(16).fill({keys:["NO","NO","NO","NO"],output:"NO",enabled:false}),
+  key_overrides:Array(16).fill({trigger:"NO",replacement:"NO",trigger_mods:[],
+    suppressed_mods:[],negative_mods:[],layers:[],options:7,enabled:false}),
+  macros:[
+    [{op:"text",text:"hello"}],
+    [{op:"down",kc:0xE0},{op:"tap",kc:0x06},{op:"up",kc:0xE0}],
+    [{op:"text",text:"git "},{op:"delay",delay:100},{op:"tap",kc:0x28}],
+    [],[],[],[],[],[],[]
+  ],
+  lighting:{mode:1,hue:0,sat:255,val:200,speed:128},
+  indicators:[{enabled:true,color:"#FF0000"},{enabled:true,color:"#00A000"},{enabled:true,color:"#808000"},
+    {enabled:false,color:"#0000FF"},{enabled:false,color:"#800080"},{enabled:false,color:"#008080"},
+    {enabled:false,color:"#0040FF"},{enabled:false,color:"#C0C0C0"},{enabled:false,color:"#FF6000"}],
+  keymap:[
+    ["ESC","BRID","BRIU","MCTL","LPAD","RGB_VAD","RGB_VAI","MPRV","MPLY","MNXT","MUTE","VOLD","VOLU","DEL","NO","MUTE","GRV","1","2","3","4","5","6","7","8","9","0","MINS","EQL","BSPC","NO","PGUP","TAB","Q","W","E","R","T","Y","U","I","O","P","LBRC","RBRC","BSLS","NO","PGDN","CAPS","A","S","D","F","G","H","J","K","L","SCLN","QUOT","NO","ENT","NO","HOME","LSFT","NO","Z","X","C","V","B","N","M","COMM","DOT","SLSH","NO","RSFT","UP","NO","LCTL","LOpt","LCmd","NO","NO","NO","SPC","NO","NO","NO","LCmd","MO(1)","RCTL","LEFT","DOWN","RGHT"],
+    ["TRNS","F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12","TRNS","NO","RGB_TOG","TRNS","Cortana","Siri","BT1","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","NO","TRNS","RGB_TOG","RGB_MOD","RGB_VAI","RGB_HUI","RGB_SAI","RGB_SPI","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","NO","TRNS","TRNS","RGB_RMOD","RGB_VAD","RGB_HUD","RGB_SAD","RGB_SPD","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","NO","TRNS","NO","END","TRNS","NO","TRNS","TRNS","TRNS","TRNS","BT2","NK_TOGG","TRNS","TRNS","TRNS","TRNS","NO","TRNS","TRNS","NO","TRNS","TRNS","TRNS","NO","NO","NO","TRNS","NO","NO","NO","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS"],
+    ["ESC","F1","F2","F3","F4","F5","F6","F7","F8","TD4","TD5","TD6","TD7","DEL","NO","MUTE","GRV","1","2","3","4","5","6","7","8","9","0","MINS","EQL","BSPC","NO","PGUP","TAB","Q","W","E","R","T","Y","U","I","O","P","LBRC","RBRC","BSLS","NO","PGDN","TD0","A","S","D","F","G","H","J","K","L","TD3","QUOT","NO","ENT","NO","TD1","LSFT","NO","Z","X","C","V","B","N","M","COMM","DOT","SLSH","NO","RSFT","UP","NO","LCTL","LGUI","LALT","NO","NO","NO","SPC","NO","NO","NO","RALT","MO(3)","RCTL","LEFT","DOWN","RGHT"],
+    ["TRNS","BRID","BRIU","MCtrl","LPad","RGB_VAD","RGB_VAI","MPRV","MPLY","MNXT","MUTE","VOLD","VOLU","TRNS","NO","RGB_TOG","TRNS","Cortana","Siri","BT1","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","NO","TRNS","RGB_TOG","RGB_MOD","RGB_VAI","RGB_HUI","RGB_SAI","RGB_SPI","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","NO","TRNS","TRNS","RGB_RMOD","RGB_VAD","RGB_HUD","RGB_SAD","RGB_SPD","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS","NO","TRNS","NO","END","TRNS","NO","TRNS","TRNS","TRNS","TRNS","BT2","NK_TOGG","TRNS","TRNS","TRNS","TRNS","NO","TRNS","TRNS","NO","TRNS","TRNS","TRNS","NO","NO","NO","TRNS","NO","NO","NO","TRNS","TRNS","TRNS","TRNS","TRNS","TRNS"]
+  ]
+};
+
+let g_demo=false;
+const _originals={};
+const _saveOriginals=()=>{
+  Object.assign(_originals,{getGlobal,getFeat,getTd,getCombo,getKo,getInd,viaGet,
+    setTT,setTdEn,setTdMode,resetCfg,setTdKc,setFlag,setParam,setInd,setCombo,setKo,setTdTiming,viaSet,viaKmReset});
+};
+_saveOriginals();
+
+function enterDemo(){
+  g_demo=true;
+  const d=DEMO_DATA;
+  const flagBits=FLAG_KEYS.reduce((m,k,i)=>m|(d.flags[k]?1<<i:0),0);
+  const noop=()=>Promise.resolve();
+  const safeParse=(kc)=>{try{return kcParse(kc);}catch(e){return 0;}};
+
+  getGlobal=()=>Promise.resolve({tt:d.tapping_term,slots:32,comboSlots:16,koSlots:16});
+  getFeat=()=>Promise.resolve({flags:flagBits,quicktap:d.quick_tap_term,astimeout:d.autoshift_timeout,
+    cwtimeout:d.caps_word_timeout,debounce:d.debounce_time,dbmethod:DEBOUNCE_METHODS.indexOf(d.debounce_method),
+    oneshot:d.oneshot_timeout});
+  getTd=i=>{const t=d.tap_dance[i]||{tap:"NO",secondary:"NO",mode:"double",enabled:false};
+    const ph="permissive_hold"in t?t.permissive_hold:null;
+    return Promise.resolve({tap:safeParse(t.tap),sec:safeParse(t.secondary),en:t.enabled?1:0,
+      mode:t.mode==="hold"?1:0,tappingTerm:t.tapping_term||0,phFlags:ph===null?0:(0x02|(ph?0x01:0))});};
+  getCombo=i=>{const c=d.combos[i]||{keys:["NO","NO","NO","NO"],output:"NO",enabled:false};
+    return Promise.resolve({keys:c.keys.map(safeParse),output:safeParse(c.output),enabled:c.enabled});};
+  getKo=i=>{const k=d.key_overrides[i]||{trigger:"NO",replacement:"NO",trigger_mods:[],
+    suppressed_mods:[],negative_mods:[],layers:[],options:7,enabled:false};
+    return Promise.resolve({trigger:safeParse(k.trigger),replacement:safeParse(k.replacement),
+      triggerMods:listToMask(k.trigger_mods),suppressedMods:listToMask(k.suppressed_mods),
+      negativeMods:listToMask(k.negative_mods),layers:k.layers.reduce((m,l)=>m|(1<<l),0),
+      options:k.options??7,enabled:k.enabled});};
+  getInd=i=>{const v=d.indicators[i]||{enabled:false,color:"#000000",scope:"board",items:[]};
+    const sc=SCOPE_IDX[v.scope||"board"]||0;
+    const its=(v.items||[]).slice(0,4).map(it=>sc===1?((it[0]<<4)|(it[1]&0x0F)):it);
+    while(its.length<4)its.push(0);
+    return Promise.resolve({en:v.enabled?1:0,r:parseInt(v.color.substr(1,2),16),
+      g:parseInt(v.color.substr(3,2),16),b:parseInt(v.color.substr(5,2),16),
+      scope:sc,count:(v.items||[]).length,items:its});};
+  viaGet=(l,r,c)=>Promise.resolve(safeParse(d.keymap[l][r*COLS+c]||"NO"));
+
+  setTT=noop;setTdEn=noop;setTdMode=noop;resetCfg=noop;setTdKc=noop;
+  setFlag=noop;setParam=noop;setInd=noop;setCombo=noop;setKo=noop;setTdTiming=noop;viaSet=noop;viaKmReset=noop;
+
+  $("#status").textContent="Demo mode — connect your keyboard to save changes.";
+  $("#app").style.display="block";
+  $("#demobanner").style.display="block";
+  $("#connect").textContent="Connect";
+  refreshAll();
+}
+
+//// ---- UI ----
+const U=42, GAP=4;
+const _mc=(()=>{ const c=document.createElement('canvas').getContext('2d');
+  c.font='10px system-ui,Segoe UI,sans-serif'; return c; })();
+function keyLabel(text,pxW){ if(_mc.measureText(text).width<=pxW-6) return text;
+  let t=text; while(t.length>1&&_mc.measureText(t+'…').width>pxW-6) t=t.slice(0,-1);
+  return t+'…'; }
+const ROWS=6, COLS=16, LAYERS=4;  // dynamic-keymap matrix dimensions
+let curLayer=2, showAll=false;
+const $=s=>document.querySelector(s);
+
+async function connect(){
+  Object.assign(window,_originals);
+  g_demo=false;
+  $("#demobanner").style.display="none";
+  if(!navigator.hid){ $("#status").textContent="WebHID unavailable — use Chrome/Edge over http(s)."; return; }
+  const filters=[{vendorId:0x3434,productId:0x0610,usagePage:0xFF60,usage:0x61}];
+  let devs=await navigator.hid.requestDevice({filters});
+  if(!devs.length){ $("#status").textContent="No device selected."; return; }
+  device=devs[0];
+  if(!device.opened) await device.open();
+  device.addEventListener("inputreport",onReport);
+  $("#status").textContent=`Connected: ${device.productName||"Smial"} (3434:0610)`;
+  $("#app").style.display="block";
+  $("#connect").textContent="Reconnect";
+  await refreshAll();
+}
+
+async function refreshAll(){
+  buildLayers(); await refreshKeyboard(); await buildDebounce();
+  await buildTapDance(); await buildTiming(); await buildFeatures(); await buildCombos();
+  await buildKeyOverrides(); await buildIndicators();
+  await loadLighting(); buildLighting(); await loadMacros(); buildMacros();
+}
+
+// Tab switching: show the matching panel, highlight the active button.
+$("#tabbar").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+  $("#tabbar").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+  document.querySelectorAll(".tabpanel").forEach(p=>p.classList.toggle("on",p.dataset.tab===b.dataset.tab));
+});
+
+function buildLayers(){
+  const names=["MAC_BASE","MAC_FN","WIN_BASE","WIN_FN"];
+  $("#layers").innerHTML=names.map((n,i)=>
+    `<button data-l="${i}" class="${i===curLayer?'on':''}">${i} ${n}</button>`).join("");
+  $("#layers").querySelectorAll("button").forEach(b=>b.onclick=async()=>{
+    curLayer=+b.dataset.l; buildLayers(); await refreshKeyboard();
+  });
+}
+
+async function refreshKeyboard(){
+  const kb=$("#kb"); kb.innerHTML=""; let maxX=0,maxY=0;
+  const cells=[];
+  for(const [r,c,x,y,w] of LAYOUT){
+    const el=document.createElement("div");
+    el.className="key"; el.style.left=(x*U)+"px"; el.style.top=(y*U)+"px";
+    el.style.width=(w*U-GAP)+"px"; el.style.height=(U-GAP)+"px";
+    el.dataset.r=r; el.dataset.c=c; el.textContent="…";
+    el.onclick=ev=>openEditor(ev,r,c,el);
+    kb.appendChild(el); cells.push(el);
+    maxX=Math.max(maxX,x+w); maxY=Math.max(maxY,y+1);
+  }
+  kb.style.height=(maxY*U)+"px"; kb.style.width=(maxX*U)+"px";
+  for(const el of cells){ const kc=await viaGet(curLayer,+el.dataset.r,+el.dataset.c);
+    el.dataset.kc=kc; const n=nameOf(kc); el.textContent=keyLabel(n,parseFloat(el.style.width)); el.title=descOf(kc); }
+}
+
+async function openEditor(ev,r,c,el){
+  const v=await pickKeycode(+el.dataset.kc, `Key R${r} C${c} (layer ${curLayer})`);
+  if(v==null) return;
+  await viaSet(curLayer,r,c,v); el.dataset.kc=v; const n=nameOf(v); el.textContent=keyLabel(n,parseFloat(el.style.width)); el.title=descOf(v);
+}
+
+$("#identify")?.addEventListener("click",async()=>{
+  if(g_demo){ $("#kbhint").textContent="Connect your keyboard to use Identify."; return; }
+  $("#kbhint").textContent="Press a key on the keyboard…";
+  try{
+    await xfer([CMD,0x08]);
+    const {row,col,kc}=await new Promise((res,rej)=>{
+      const to=setTimeout(()=>{identifyResolver=null;rej(new Error("timeout"))},15000);
+      identifyResolver=r=>{clearTimeout(to);res(r);};
+    });
+    $("#kbhint").textContent=`Pressed: R${row} C${col} = ${nameOf(kc)}`;
+    const el=$(`#kb .key[data-r="${row}"][data-c="${col}"]`);
+    if(el){ el.classList.add("hl"); setTimeout(()=>el.classList.remove("hl"),1500); }
+  }catch(e){ $("#kbhint").textContent="Identify timed out."; }
+});
+
+async function buildTapDance(){
+  const tb=$("#tdtable tbody"); tb.innerHTML="";
+  const n=showAll?32:8;
+  for(let i=0;i<n;i++){
+    const t=await getTd(i);
+    const phMode=(t.phFlags&0x02)?((t.phFlags&0x01)?1:2):0;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${i}</td><td>${TD_NAMES[i]}</td>
+      <td class="tdtap"></td>
+      <td class="tdsec"></td>
+      <td><select class="mode" style="width:78px"><option value="0"${t.mode?"":" selected"}>double</option>
+          <option value="1"${t.mode?" selected":""}>hold</option></select></td>
+      <td><input type="number" class="tt" min="0" max="1000" value="${t.tappingTerm}"
+          style="width:64px" title="0 = use global tapping term"></td>
+      <td><select class="ph" style="width:78px"><option value="0"${phMode===0?" selected":""}>Global</option>
+          <option value="1"${phMode===1?" selected":""}>On</option>
+          <option value="2"${phMode===2?" selected":""}>Off</option></select></td>
+      <td><input type="checkbox" class="en" ${t.en?"checked":""}></td>`;
+    tb.appendChild(tr);
+    const mode=tr.querySelector(".mode"), en=tr.querySelector(".en");
+    const ttInp=tr.querySelector(".tt"), phSel=tr.querySelector(".ph");
+    let tapBtn, secBtn;
+    const saveKc=()=>setTdKc(i,+tapBtn.dataset.kc,+secBtn.dataset.kc);
+    const saveTiming=()=>{
+      const tt=parseInt(ttInp.value)||0;
+      const ph=+phSel.value;
+      setTdTiming(i,tt,ph===0?0:(0x02|(ph===1?0x01:0)));
+    };
+    tapBtn=kcField(t.tap,`TD${i} tap`,saveKc);
+    secBtn=kcField(t.sec,`TD${i} secondary`,saveKc);
+    tr.querySelector(".tdtap").appendChild(tapBtn);
+    tr.querySelector(".tdsec").appendChild(secBtn);
+    mode.onchange=()=>setTdMode(i,+mode.value);
+    ttInp.onchange=saveTiming;
+    phSel.onchange=saveTiming;
+    en.onchange=()=>setTdEn(i,en.checked);
+  }
+}
+$("#showall").addEventListener("click",async()=>{ showAll=!showAll;
+  $("#showall").textContent=showAll?"Show first 8 slots":"Show all 32 slots"; await buildTapDance(); });
+
+async function buildTiming(){
+  const g=await getGlobal(); const f=await getFeat();
+  const numRow=(label,val,min,max)=>`
+    <div class="row"><label>${label}</label>
+      <input type="range" min="${min}" max="${max}" value="${val}" data-k="${label}">
+      <input type="number" min="${min}" max="${max}" value="${val}" data-k="${label}" style="width:80px">
+      <span class="hint">ms</span></div>`;
+  $("#timing").innerHTML=`
+    ${numRow("Tapping term",g.tt,50,500)}
+    ${numRow("Quick tap term",f.quicktap,0,500)}
+    ${numRow("Auto-shift timeout",f.astimeout,50,500)}
+    ${numRow("Caps Word timeout",f.cwtimeout,0,10000)}
+    ${numRow("One-shot timeout",f.oneshot,0,5000)}`;
+  const apply=(label,v)=>{
+    if(label==="Tapping term") return setTT(v);
+    if(label==="Quick tap term") return setParam(PARAM.QUICKTAP,v);
+    if(label==="Auto-shift timeout") return setParam(PARAM.ASTIMEOUT,v);
+    if(label==="Caps Word timeout") return setParam(PARAM.CWTIMEOUT,v);
+    if(label==="One-shot timeout") return setParam(PARAM.ONESHOT,v);
+  };
+  $("#timing").querySelectorAll("input[data-k]").forEach(inp=>{
+    inp.oninput=()=>{ const k=inp.dataset.k;
+      $("#timing").querySelectorAll(`input[data-k="${k}"]`).forEach(o=>{if(o!==inp)o.value=inp.value;}); };
+    inp.onchange=()=>apply(inp.dataset.k,+inp.value);
+  });
+}
+
+// Debounce panel (Keyboard tab) — time slider + method dropdown, mirrors the native app.
+async function buildDebounce(){
+  const f=await getFeat();
+  $("#debounce").innerHTML=`
+    <div class="row"><label>Time</label>
+      <input type="range" min="0" max="50" value="${f.debounce}" data-dbk>
+      <input type="number" min="0" max="50" value="${f.debounce}" data-dbk style="width:80px">
+      <span class="hint">ms</span></div>
+    <div class="row"><label>Method</label>
+      <select id="dbmethod">${DEBOUNCE_METHOD_LABELS.map((m,i)=>
+        `<option value="${i}"${i===f.dbmethod?" selected":""}>${m}</option>`).join("")}</select></div>`;
+  $("#debounce").querySelectorAll("input[data-dbk]").forEach(inp=>{
+    inp.oninput=()=>$("#debounce").querySelectorAll("input[data-dbk]").forEach(o=>{if(o!==inp)o.value=inp.value;});
+    inp.onchange=()=>setParam(PARAM.DEBOUNCE,+inp.value);
+  });
+  $("#dbmethod").onchange=e=>setParam(PARAM.DEBOUNCE_METHOD,+e.target.value);
+}
+
+async function buildFeatures(){
+  const f=await getFeat();
+  const chk=(label,bit,on)=>`<label class="check">
+      <input type="checkbox" data-bit="${bit}" ${on?"checked":""}><span>${label}</span></label>`;
+  $("#features").innerHTML=`
+    <div class="pillrow" style="flex-direction:column">
+      ${chk("Caps Word",FF.CAPS_WORD,f.flags&(1<<FF.CAPS_WORD))}
+      ${(f.flags&(1<<FF.CAPS_WORD)) ? `<div style="margin-left:18px">
+        ${chk("↳ Double-tap Shift → Caps Word",FF.CW_DOUBLE_SHIFT,f.flags&(1<<FF.CW_DOUBLE_SHIFT))}
+        ${chk("↳ Both Shifts → Caps Word",FF.CW_BOTH_SHIFTS,f.flags&(1<<FF.CW_BOTH_SHIFTS))}
+      </div>` : ""}
+      ${chk("Permissive hold",FF.PERMISSIVE,f.flags&(1<<FF.PERMISSIVE))}
+      ${chk("Hold on other key press",FF.HOKP,f.flags&(1<<FF.HOKP))}
+      ${chk("Retro tapping",FF.RETRO,f.flags&(1<<FF.RETRO))}
+      ${chk("Auto Shift",FF.AUTOSHIFT,f.flags&(1<<FF.AUTOSHIFT))}
+    </div>`;
+  $("#features").querySelectorAll("input[data-bit]").forEach(c=>
+    c.onchange=async()=>{ await setFlag(+c.dataset.bit,c.checked);
+      // Toggling Caps Word shows/hides its shift-activation sub-options.
+      if(+c.dataset.bit===FF.CAPS_WORD) buildFeatures(); });
+}
+
+// Order must match the firmware indicator enum (IND_*). "Windows mode" is
+// persistent — when enabled it tints the whole board the entire time you're in
+// Windows mode, replacing the normal RGB effect.
+const IND_NAMES=["Caps Lock","Caps Word","Num Lock","Scroll Lock","One-shot mod",
+                 "Mac FN layer","Win FN layer","Mac mode","Windows mode"];
+const SCOPE_NAMES=["board","keys","rows","cols"];
+const SCOPE_IDX={board:0,keys:1,rows:2,cols:3};
+
+// Scope picker: choose Board / Keys / Rows / Columns, then click keys to select
+// (up to 4). Rows/Columns are matrix rows/cols; clicking a key toggles its whole
+// row/column. items hold packed (row<<4)|col for keys, or row/col index.
+let scopeState=null, scopeResolver=null;
+function pickScope(state,name,colorHex){
+  scopeState={scope:state.scope||0, items:(state.items||[]).slice(0,state.count||0)};
+  const valOf=(r,c)=> scopeState.scope===1?((r<<4)|(c&0x0F)) : scopeState.scope===2?r : scopeState.scope===3?c : 0;
+  const isSel=(r,c)=> scopeState.scope!==0 && scopeState.items.includes(valOf(r,c));
+  const upd=()=>$("#scopehead .title").textContent = scopeState.scope===0
+    ? `"${name}" lights the whole board`
+    : `Click to toggle ${["","keys","rows","columns"][scopeState.scope]} for "${name}" — selected ${scopeState.items.length}/4`;
+  const renderModes=()=>{
+    const box=$("#scopemodes"); box.innerHTML="";
+    ["Board","Keys","Rows","Columns"].forEach((m,mi)=>{
+      const b=document.createElement("button"); b.textContent=m;
+      if(scopeState.scope===mi) b.classList.add("on");
+      b.onclick=()=>{ if(scopeState.scope!==mi){ scopeState.scope=mi; scopeState.items=[];
+        renderModes(); render(); upd(); } };
+      box.appendChild(b);
+    });
+  };
+  const render=()=>{
+    const kb=$("#scopekb"); kb.innerHTML=""; let maxX=0,maxY=0;
+    for(const [r,c,x,y,w] of LAYOUT){
+      const el=document.createElement("div");
+      el.className="key"; el.style.left=(x*U)+"px"; el.style.top=(y*U)+"px";
+      el.style.width=(w*U-GAP)+"px"; el.style.height=(U-GAP)+"px";
+      const main=$(`#kb .key[data-r="${r}"][data-c="${c}"]`);
+      const skc=main?+main.dataset.kc:null;
+      const shortName=main?nameOf(skc):`${r},${c}`;
+      el.textContent=keyLabel(shortName,parseFloat(el.style.width));
+      el.title=skc!=null?descOf(skc):shortName;
+      if(isSel(r,c)){ el.classList.add("sel"); el.style.background=colorHex; }
+      el.onclick=()=>{ if(scopeState.scope===0) return;
+        const v=valOf(r,c), j=scopeState.items.indexOf(v);
+        if(j>=0) scopeState.items.splice(j,1); else if(scopeState.items.length<4) scopeState.items.push(v);
+        render(); upd(); };
+      kb.appendChild(el); maxX=Math.max(maxX,x+w); maxY=Math.max(maxY,y+1);
+    }
+    kb.style.height=(maxY*U)+"px"; kb.style.width=(maxX*U)+"px";
+  };
+  renderModes(); upd(); render();
+  $("#scopepicker").classList.add("show");
+  return new Promise(res=>{ scopeResolver=res; });
+}
+function closeScope(){
+  $("#scopepicker").classList.remove("show");
+  if(scopeResolver){ const r=scopeResolver; scopeResolver=null;
+    const items=scopeState.items.slice(0,4), count=items.length;
+    while(items.length<4) items.push(0);
+    r({scope:scopeState.scope,count,items}); }
+}
+$("#scopedone").onclick=closeScope;
+$("#scopepicker").onclick=e=>{ if(e.target.id==="scopepicker") closeScope(); };
+
+const scopeLabel=st=>{
+  if(!st.scope||!st.count) return "board";
+  const w=["","key","row","col"][st.scope];
+  return `${st.count} ${w}${st.count>1?"s":""}`;
+};
+async function buildIndicators(){
+  const box=$("#indicators"); box.innerHTML="";
+  for(let i=0;i<IND_NAMES.length;i++){
+    const v=await getInd(i);
+    const hex="#"+[v.r,v.g,v.b].map(x=>x.toString(16).padStart(2,"0")).join("");
+    const st={scope:v.scope||0, count:v.count||0, items:(v.items||[0,0,0,0]).slice()};
+    const div=document.createElement("div"); div.className="row";
+    div.innerHTML=`<label>${IND_NAMES[i]}</label>
+      <input type="checkbox" class="en" ${v.en?"checked":""}>
+      <input type="color" class="col" value="${hex}">
+      <button class="scopebtn">${scopeLabel(st)}</button>`;
+    box.appendChild(div);
+    const en=div.querySelector(".en"), col=div.querySelector(".col"), sb=div.querySelector(".scopebtn");
+    const save=()=>{ const h=col.value; const r=parseInt(h.substr(1,2),16),
+      g=parseInt(h.substr(3,2),16), b=parseInt(h.substr(5,2),16);
+      setInd(i,en.checked,r,g,b,st.scope,st.count,st.items); };
+    en.onchange=save; col.onchange=save;
+    sb.onclick=async()=>{ const res=await pickScope(st,IND_NAMES[i],col.value);
+      st.scope=res.scope; st.count=res.count; st.items=res.items; sb.textContent=scopeLabel(st); save(); };
+  }
+}
+
+async function buildCombos(){
+  const tb=$("#combotable tbody"); tb.innerHTML="";
+  for(let i=0;i<16;i++){
+    const c=await getCombo(i);
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${i}</td><td class="k0"></td><td class="k1"></td><td class="k2"></td>
+      <td class="k3"></td><td class="out"></td>
+      <td><input type="checkbox" class="en" ${c.enabled?"checked":""}></td>`;
+    tb.appendChild(tr);
+    const en=tr.querySelector(".en");
+    const keyBtn=[]; const state={keys:[...c.keys],output:c.output};
+    const save=()=>setCombo(i,{keys:state.keys,output:state.output,enabled:en.checked});
+    for(let k=0;k<4;k++){
+      const b=kcField(c.keys[k],`Combo ${i} key ${k+1}`,v=>{state.keys[k]=v;save();});
+      tr.querySelector(".k"+k).appendChild(b); keyBtn.push(b);
+    }
+    tr.querySelector(".out").appendChild(kcField(c.output,`Combo ${i} output`,v=>{state.output=v;save();}));
+    en.onchange=save;
+  }
+}
+
+async function buildKeyOverrides(){
+  const tb=$("#kotable tbody"); tb.innerHTML="";
+  for(let i=0;i<16;i++){
+    const k=await getKo(i);
+    const tr=document.createElement("tr");
+    const modsStr=maskToList(k.triggerMods).join("+");
+    const layStr=[0,1,2,3,4,5,6,7].filter(l=>k.layers&(1<<l)).join(",");
+    tr.innerHTML=`<td>${i}</td><td class="trig"></td><td class="repl"></td>
+      <td><input type="text" class="mods" value="${modsStr}" placeholder="LSft+LCtl" style="width:120px"></td>
+      <td><input type="text" class="lay" value="${layStr}" placeholder="0,2" style="width:70px"></td>
+      <td><input type="checkbox" class="en" ${k.enabled?"checked":""}></td>`;
+    tb.appendChild(tr);
+    const en=tr.querySelector(".en"), mods=tr.querySelector(".mods"), lay=tr.querySelector(".lay");
+    const state={trigger:k.trigger,replacement:k.replacement,suppressedMods:k.suppressedMods,
+                 negativeMods:k.negativeMods,options:k.options||7};
+    const parseMods=s=>{ let m=0; for(const t of s.split("+")){ const i=MOD_MASK_NAMES.findIndex(
+        n=>n.toUpperCase()===t.trim().toUpperCase()); if(i>=0) m|=1<<i; } return m; };
+    const parseLay=s=>{ let m=0; for(const t of s.split(",")){ const l=parseInt(t); if(l>=0&&l<8) m|=1<<l; } return m; };
+    const save=()=>setKo(i,{trigger:state.trigger,replacement:state.replacement,
+      triggerMods:parseMods(mods.value),suppressedMods:state.suppressedMods,negativeMods:state.negativeMods,
+      layers:parseLay(lay.value),options:state.options,enabled:en.checked});
+    tr.querySelector(".trig").appendChild(kcField(k.trigger,`Override ${i} trigger`,v=>{state.trigger=v;save();}));
+    tr.querySelector(".repl").appendChild(kcField(k.replacement,`Override ${i} replacement`,v=>{state.replacement=v;save();}));
+    mods.onchange=save; lay.onchange=save; en.onchange=save;
+  }
+}
+
+// Macro editor — mirrors drawMacros() in src/gui.cpp. Edits stage into g_macros;
+// device writes happen on Clear slot / Reset all / Apply to keyboard only.
+const MACRO_OPS=["text","tap","down","up","delay"];
+const MACRO_OP_LABELS=["Text","Tap","Down","Up","Delay"];
+function buildMacros(){
+  const root=$("#macros"); root.innerHTML="";
+  if(g_macroCount===0){
+    root.innerHTML='<div class="hint">Macro support not detected (DYNAMIC_KEYMAP_MACRO_ENABLE not compiled in).</div>';
+    return;
+  }
+  if(g_macros.length<g_macroCount) while(g_macros.length<g_macroCount) g_macros.push([]);
+  g_selMacro=Math.max(0,Math.min(g_selMacro,g_macroCount-1));
+  const mac=g_macros[g_selMacro];
+
+  // slot selector + global actions
+  const bar=document.createElement("div"); bar.className="row"; bar.style.marginBottom="8px";
+  let slotOpts=""; for(let i=0;i<g_macroCount;i++) slotOpts+=`<option value="${i}" ${i===g_selMacro?"selected":""}>${i}</option>`;
+  bar.innerHTML=`<span>Slot:</span><select class="slot" style="width:70px">${slotOpts}</select>
+    <button class="clear">Clear slot</button><button class="resetall">Reset all</button>`;
+  root.appendChild(bar);
+  bar.querySelector(".slot").onchange=e=>{ g_selMacro=+e.target.value; buildMacros(); };
+  bar.querySelector(".clear").onclick=async()=>{ g_macros[g_selMacro]=[]; await applyMacros(); buildMacros(); };
+  bar.querySelector(".resetall").onclick=async()=>{ g_macros=Array.from({length:g_macroCount},()=>[]);
+    if(!g_demo){ try{ await macroReset(); }catch(e){} } buildMacros(); };
+
+  // steps table
+  const table=document.createElement("table");
+  table.innerHTML=`<thead><tr><th>#</th><th>type</th><th>value</th><th></th></tr></thead><tbody></tbody>`;
+  root.appendChild(table);
+  const tb=table.querySelector("tbody");
+  mac.forEach((s,i)=>{
+    const tr=document.createElement("tr");
+    let opOpts=""; MACRO_OPS.forEach((o,oi)=>opOpts+=`<option value="${o}" ${o===s.op?"selected":""}>${MACRO_OP_LABELS[oi]}</option>`);
+    tr.innerHTML=`<td>${i}</td><td><select class="op" style="width:80px">${opOpts}</select></td>
+      <td class="val"></td><td><button class="del">✕</button></td>`;
+    tb.appendChild(tr);
+    const val=tr.querySelector(".val");
+    if(s.op==="text"){ const inp=document.createElement("input"); inp.type="text"; inp.value=s.text||"";
+      inp.style.width="100%"; inp.oninput=()=>{ s.text=inp.value; }; val.appendChild(inp); }
+    else if(s.op==="delay"){ const inp=document.createElement("input"); inp.type="number"; inp.min=0; inp.max=65535;
+      inp.value=s.delay||0; inp.style.width="90px"; inp.oninput=()=>{ s.delay=Math.max(0,Math.min(65535,+inp.value||0)); };
+      val.appendChild(inp); val.appendChild(document.createTextNode(" ms")); }
+    else { const b=document.createElement("button"); b.className="kcfield";
+      const refresh=()=>{ b.textContent=nameOf(s.kc&0xFF); }; refresh();
+      b.onclick=async()=>{ const v=await pickKeycode(s.kc&0xFF,`Macro ${g_selMacro} step ${i}`);
+        if(v!=null){ if(v>0xFF){ b.title="only basic keycodes are supported in macros"; } s.kc=v&0xFF; refresh(); } };
+      val.appendChild(b); }
+    tr.querySelector(".op").onchange=e=>{ s.op=e.target.value; s.kc=0; s.delay=0; s.text=""; buildMacros(); };
+    tr.querySelector(".del").onclick=()=>{ mac.splice(i,1); buildMacros(); };
+  });
+
+  // add-step buttons + apply
+  const add=document.createElement("div"); add.className="row"; add.style.margin="8px 0";
+  MACRO_OPS.forEach((o,oi)=>{ const b=document.createElement("button"); b.textContent="+ "+MACRO_OP_LABELS[oi];
+    b.onclick=()=>{ mac.push({op:o,kc:0,delay:0,text:""}); buildMacros(); }; add.appendChild(b); });
+  root.appendChild(add);
+
+  const foot=document.createElement("div"); foot.className="row";
+  const apply=document.createElement("button"); apply.textContent="Apply to keyboard"; apply.className="primary";
+  apply.onclick=()=>applyMacros();
+  const info=document.createElement("span"); info.className="hint"; info.textContent=`Buffer: ${g_macroBufSz} bytes available`;
+  foot.appendChild(apply); foot.appendChild(info); root.appendChild(foot);
+}
+
+// HSV<->RGB on QMK's 0-255 scale (firmware stores HSV; the browser color input is RGB).
+function lightHsv2rgb(h,s,v){ h/=255;s/=255;v/=255; const i=Math.floor(h*6),f=h*6-i,
+  p=v*(1-s),q=v*(1-f*s),t=v*(1-(1-f)*s); let r,g,b;
+  switch(i%6){case 0:r=v,g=t,b=p;break;case 1:r=q,g=v,b=p;break;case 2:r=p,g=v,b=t;break;
+    case 3:r=p,g=q,b=v;break;case 4:r=t,g=p,b=v;break;default:r=v,g=p,b=q;}
+  return [Math.round(r*255),Math.round(g*255),Math.round(b*255)]; }
+function lightRgb2hsv(r,g,b){ r/=255;g/=255;b/=255; const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;
+  let h=0; if(d){ if(mx===r)h=((g-b)/d)%6; else if(mx===g)h=(b-r)/d+2; else h=(r-g)/d+4; h/=6; if(h<0)h+=1; }
+  return [Math.round(h*255),Math.round((mx?d/mx:0)*255),Math.round(mx*255)]; }
+
+// Lighting editor — mirrors drawLighting() in src/gui.cpp. Changes apply to the device
+// immediately; Save writes the current settings to EEPROM.
+function buildLighting(){
+  const root=$("#lighting"); root.innerHTML="";
+  if(!g_lightOk){ root.innerHTML='<div class="hint">RGB lighting controls not available on this device.</div>'; return; }
+  root.innerHTML='<div class="hint" style="margin-bottom:8px">Changes take effect immediately; Save writes to EEPROM.</div>';
+
+  // mode
+  const modeRow=document.createElement("div"); modeRow.className="row"; modeRow.style.marginBottom="8px";
+  const limit=Math.min(g_lightModeMax+1,RGB_MODE_NAMES.length);
+  let opts=""; for(let i=0;i<limit;i++) opts+=`<option value="${i}" ${i===g_light.mode?"selected":""}>${RGB_MODE_NAMES[i]}</option>`;
+  modeRow.innerHTML=`<label>Mode</label><select class="mode" style="width:260px">${opts}</select>`;
+  root.appendChild(modeRow);
+  modeRow.querySelector(".mode").onchange=e=>{ g_light.mode=+e.target.value; if(!g_demo) setLightMode(g_light.mode); };
+
+  // color (hue+sat+brightness via the HSV color picker, same as the native ColorEdit3)
+  const colRow=document.createElement("div"); colRow.className="row"; colRow.style.marginBottom="8px";
+  const [r,g,b]=lightHsv2rgb(g_light.hue,g_light.sat,g_light.val);
+  const hex="#"+[r,g,b].map(x=>x.toString(16).padStart(2,"0")).join("");
+  colRow.innerHTML=`<label>Color</label><input type="color" class="col" value="${hex}">`;
+  root.appendChild(colRow);
+  colRow.querySelector(".col").oninput=e=>{ const h=e.target.value;
+    const [nh,ns,nv]=lightRgb2hsv(parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16));
+    if(nh!==g_light.hue||ns!==g_light.sat){ g_light.hue=nh; g_light.sat=ns; if(!g_demo) setLightColor(nh,ns); }
+    if(nv!==g_light.val){ g_light.val=nv; if(!g_demo) setLightVal(nv); } };
+
+  // speed
+  const spdRow=document.createElement("div"); spdRow.className="row"; spdRow.style.marginBottom="8px";
+  spdRow.innerHTML=`<label>Speed</label><input type="range" class="spd" min="0" max="255" value="${g_light.speed}" style="width:200px">
+    <input type="number" class="spdn" min="0" max="255" value="${g_light.speed}" style="width:60px">`;
+  root.appendChild(spdRow);
+  const spd=spdRow.querySelector(".spd"), spdn=spdRow.querySelector(".spdn");
+  const setSpd=v=>{ v=Math.max(0,Math.min(255,v|0)); g_light.speed=v; spd.value=v; spdn.value=v; if(!g_demo) setLightSpeed(v); };
+  spd.oninput=()=>setSpd(+spd.value); spdn.oninput=()=>setSpd(+spdn.value);
+
+  // save
+  const foot=document.createElement("div"); foot.className="row";
+  const save=document.createElement("button"); save.textContent="Save to keyboard"; save.className="primary";
+  save.onclick=()=>{ if(!g_demo) saveLighting(); };
+  const info=document.createElement("span"); info.className="hint"; info.textContent="(writes current lighting settings to EEPROM)";
+  foot.appendChild(save); foot.appendChild(info); root.appendChild(foot);
+}
+
+//// ---- presets (shared JSON schema with q1config.py) ----
+const FLAG_KEYS=["caps_word","permissive_hold","hold_on_other_key","retro_tapping","auto_shift",
+  "caps_word_double_shift","caps_word_both_shifts"];
+function kcParse(t){
+  t=String(t).toUpperCase().trim();
+  if(t.startsWith("KC_")) t=t.slice(3);
+  if(t.startsWith("S(")&&t.endsWith(")")) return 0x0200|kcParse(t.slice(2,-1));
+  if(t.startsWith("MT(")&&t.endsWith(")")){ const [m,b]=t.slice(3,-1).split(",");
+    return QK_MOD_TAP|(mods5FromStr(m)<<8)|(kcParse(b)&0xFF); }
+  if(t.startsWith("LT(")&&t.endsWith(")")){ const [l,b]=t.slice(3,-1).split(",");
+    return QK_LAYER_TAP|((parseInt(l)&0xF)<<8)|(kcParse(b)&0xFF); }
+  if(t.startsWith("OSM(")&&t.endsWith(")")) return QK_OSM|(mods5FromStr(t.slice(4,-1))&0x1F);
+  if(t.startsWith("OSL(")&&t.endsWith(")")) return 0x5280|(parseInt(t.slice(4,-1))&0x1F);
+  if(t.startsWith("MOD(")&&t.endsWith(")")){ const [m,b]=t.slice(4,-1).split(",");
+    return QK_MODS|(mods5FromStr(m)<<8)|(kcParse(b)&0xFF); }
+  if(t.startsWith("TD(")&&t.endsWith(")")) return 0x5700|parseInt(t.slice(3,-1));
+  if(/^TD\d+$/.test(t)) return 0x5700|parseInt(t.slice(2));
+  if(t.startsWith("MACRO(")&&t.endsWith(")")) return QK_MACRO|(parseInt(t.slice(6,-1))&0xFF);
+  if(/^MACRO\d+$/.test(t)) return QK_MACRO|(parseInt(t.slice(5))&0xFF);
+  if(t.startsWith("0X")) return parseInt(t,16);
+  if(t in KC) return KC[t];
+  if(/^\d+$/.test(t)) return parseInt(t,10);
+  throw new Error("Unknown keycode: "+t);
+}
+async function readConfig(){
+  const g=await getGlobal(), f=await getFeat();
+  const flags={}; FLAG_KEYS.forEach((k,bit)=>flags[k]=!!(f.flags&(1<<bit)));
+  const tap_dance=[];
+  for(let i=0;i<32;i++){ const t=await getTd(i);
+    const ph=(t.phFlags&0x02)?!!(t.phFlags&0x01):null;
+    tap_dance.push({tap:nameOf(t.tap),secondary:nameOf(t.sec),mode:t.mode?"hold":"double",
+                    enabled:!!t.en,tapping_term:t.tappingTerm,permissive_hold:ph}); }
+  const combos=[];
+  for(let i=0;i<16;i++){ const c=await getCombo(i);
+    combos.push({keys:c.keys.map(nameOf),output:nameOf(c.output),enabled:c.enabled}); }
+  const key_overrides=[];
+  for(let i=0;i<16;i++){ const k=await getKo(i);
+    key_overrides.push({trigger:nameOf(k.trigger),replacement:nameOf(k.replacement),
+      trigger_mods:maskToList(k.triggerMods),suppressed_mods:maskToList(k.suppressedMods),
+      negative_mods:maskToList(k.negativeMods),
+      layers:[0,1,2,3,4,5,6,7].filter(l=>k.layers&(1<<l)),options:k.options,enabled:k.enabled}); }
+  const indicators=[];
+  for(let i=0;i<IND_NAMES.length;i++){ const v=await getInd(i);
+    const hex="#"+[v.r,v.g,v.b].map(x=>x.toString(16).padStart(2,"0")).join("").toUpperCase();
+    // items: KEYS = [row,col] pairs; ROWS/COLS = indices; BOARD = [].
+    const items=(v.items||[]).slice(0,v.count||0).map(it=>v.scope===1?[it>>4,it&0x0F]:it);
+    indicators.push({enabled:!!v.en,color:hex,scope:SCOPE_NAMES[v.scope||0],items}); }
+  // Full dynamic keymap (all layers, row-major) so a preset can reproduce
+  // key->TD (and any other) assignments on stock firmware.
+  const keymap=[];
+  for(let l=0;l<LAYERS;l++){ const layer=[];
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) layer.push(nameOf(await viaGet(l,r,c)));
+    keymap.push(layer); }
+  return {schema:1,tapping_term:g.tt,quick_tap_term:f.quicktap,autoshift_timeout:f.astimeout,
+          caps_word_timeout:f.cwtimeout,debounce_time:f.debounce,
+          debounce_method:DEBOUNCE_METHODS[f.dbmethod]||"sym_defer_g",oneshot_timeout:f.oneshot,
+          flags,tap_dance,combos,key_overrides,indicators,keymap};
+}
+async function writeConfig(p){
+  const cur=await readConfig(); let n=0;
+  if(cur.tapping_term!==p.tapping_term){ await setTT(p.tapping_term); n++; }
+  for(const [k,pid] of [["quick_tap_term",PARAM.QUICKTAP],["autoshift_timeout",PARAM.ASTIMEOUT],
+                        ["caps_word_timeout",PARAM.CWTIMEOUT],["debounce_time",PARAM.DEBOUNCE],
+                        ["oneshot_timeout",PARAM.ONESHOT]])
+    if(p[k]!==undefined && cur[k]!==p[k]){ await setParam(pid,p[k]); n++; }
+  if(p.debounce_method!==undefined && cur.debounce_method!==p.debounce_method){
+    const idx=DEBOUNCE_METHODS.indexOf(p.debounce_method);
+    if(idx>=0){ await setParam(PARAM.DEBOUNCE_METHOD,idx); n++; } }
+  for(let bit=0;bit<FLAG_KEYS.length;bit++){ const k=FLAG_KEYS[bit];
+    const want=!!(p.flags&&p.flags[k]); if(cur.flags[k]!==want){ await setFlag(bit,want); n++; } }
+  for(let i=0;i<32 && i<(p.tap_dance||[]).length;i++){ const c=cur.tap_dance[i],t=p.tap_dance[i];
+    if(c.tap!==t.tap||c.secondary!==t.secondary){ await setTdKc(i,kcParse(t.tap),kcParse(t.secondary)); n++; }
+    if(c.mode!==t.mode){ await setTdMode(i,t.mode==="hold"?1:0); n++; }
+    if(c.enabled!==t.enabled){ await setTdEn(i,t.enabled?1:0); n++; }
+    const ttSame=!("tapping_term" in t)||c.tapping_term===t.tapping_term;
+    const phSame=!("permissive_hold" in t)||JSON.stringify(c.permissive_hold)===JSON.stringify(t.permissive_hold);
+    if(!ttSame||!phSame){
+      const tt=t.tapping_term||0;
+      const ph=("permissive_hold" in t)?t.permissive_hold:null;
+      await setTdTiming(i,tt,ph===null?0:(0x02|(ph?0x01:0))); n++; } }
+  for(let i=0;i<16 && i<(p.combos||[]).length;i++){ const c=cur.combos[i],t=p.combos[i];
+    if(JSON.stringify(c)!==JSON.stringify(t)){
+      await setCombo(i,{keys:(t.keys||[]).map(kcParse).concat([0,0,0,0]).slice(0,4),
+                        output:kcParse(t.output),enabled:!!t.enabled}); n++; } }
+  for(let i=0;i<16 && i<(p.key_overrides||[]).length;i++){ const c=cur.key_overrides[i],t=p.key_overrides[i];
+    if(JSON.stringify(c)!==JSON.stringify(t)){
+      await setKo(i,{trigger:kcParse(t.trigger),replacement:kcParse(t.replacement),
+        triggerMods:listToMask(t.trigger_mods),suppressedMods:listToMask(t.suppressed_mods),
+        negativeMods:listToMask(t.negative_mods),
+        layers:(t.layers||[]).reduce((m,l)=>m|(1<<l),0),options:t.options??7,enabled:!!t.enabled}); n++; } }
+  for(let i=0;i<IND_NAMES.length && i<(p.indicators||[]).length;i++){ const c=cur.indicators[i],t=p.indicators[i];
+    const citems=JSON.stringify([c.scope||"board",c.items||[]]);
+    const titems=JSON.stringify([t.scope||"board",t.items||[]]);
+    if(c.enabled!==t.enabled||c.color.toUpperCase()!==t.color.toUpperCase()||citems!==titems){
+      const h=t.color, sc=SCOPE_IDX[t.scope||"board"]||0;
+      const items=(t.items||[]).slice(0,4).map(it=>sc===1?((it[0]<<4)|(it[1]&0x0F)):it);
+      const count=items.length; while(items.length<4) items.push(0);
+      await setInd(i,t.enabled?1:0,
+        parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16),
+        sc,count,items); n++; } }
+  if(p.keymap){
+    for(let l=0;l<LAYERS && l<p.keymap.length;l++)
+      for(let i=0;i<ROWS*COLS && i<p.keymap[l].length;i++)
+        if(cur.keymap[l][i]!==p.keymap[l][i]){
+          await viaSet(l, Math.floor(i/COLS), i%COLS, kcParse(p.keymap[l][i])); n++; } }
+  return n;
+}
+async function savePreset(){
+  const name=prompt("Preset name:","mypreset"); if(!name) return;
+  const cfg=await readConfig(); cfg.name=name;
+  const blob=new Blob([JSON.stringify(cfg,null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download=name+".json"; a.click(); URL.revokeObjectURL(a.href);
+}
+function loadPresetFile(){
+  const inp=document.createElement("input"); inp.type="file"; inp.accept=".json,application/json";
+  inp.onchange=async()=>{ const f=inp.files[0]; if(!f) return; let p;
+    try{ p=JSON.parse(await f.text()); }catch(e){ alert("Not valid JSON."); return; }
+    const n=await writeConfig(p); await refreshAll(); alert(`Loaded ${f.name} (${n} change(s)).`); };
+  inp.click();
+}
+
+$("#connect").addEventListener("click",connect);
+$("#demo").addEventListener("click",enterDemo);
+$("#exitdemo").addEventListener("click",()=>location.reload());
+$("#savep").addEventListener("click",savePreset);
+$("#loadp").addEventListener("click",loadPresetFile);
+$("#rcfg").addEventListener("click",async()=>{ if(confirm("Reset config to defaults?")){
+  await resetCfg(); await refreshAll(); } });
+$("#rkm").addEventListener("click",async()=>{ if(confirm("Reset the WHOLE keymap to compiled defaults?")){
+  await viaKmReset(); await refreshKeyboard(); } });
+</script>
+</body>
+</html>

@@ -1,8 +1,8 @@
 # Porting real-time config to another QMK keyboard
 
-This guide explains the firmware side of q1config and how to add a compatible
+This guide explains the firmware side of Smial and how to add a compatible
 real-time-configuration interface to **another QMK keyboard that has no Vial port**. Once a
-board speaks this protocol, the same `q1config.py` CLI and `q1config.html` WebHID GUI work
+board speaks this protocol, the same `smial.py` CLI and `smial.html` WebHID GUI work
 against it (after a VID/PID + layout tweak).
 
 The original reference is the Keychron Q1 Pro `rtcfg` keymap. The same firmware has since been
@@ -255,9 +255,9 @@ Each maps a `user_config` field (or bit) to a QMK hook; see the `rtcfg` keymap f
 
 The protocol is board-independent, so the CLI and GUI port with two changes:
 
-1. **VID/PID** — set `VID`/`PID` (`q1config.py`) and the WebHID filter (`q1config.html`) to
+1. **VID/PID** — set `VID`/`PID` (`smial.py`) and the WebHID filter (`smial.html`) to
    your board's USB IDs (from its `info.json` / `config.h`).
-2. **Layout** (GUI only) — replace the `LAYOUT` array in `q1config.html` with your board's
+2. **Layout** (GUI only) — replace the `LAYOUT` array in `smial.html` with your board's
    key coordinates from its `info.json` `layouts[...]layout` (each `{matrix:[r,c], x, y, w}`).
 
 Drop any subcommands/UI for features you didn't implement. The preset JSON schema is

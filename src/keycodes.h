@@ -5,6 +5,7 @@
 #include <vector>
 
 std::string nameOf(uint16_t code);
+std::string descOf(uint16_t code);  // human-readable description (falls back to nameOf)
 uint16_t    kcParse(const std::string& s);  // throws std::runtime_error on unknown
 const std::vector<std::pair<std::string, uint16_t>>& allKeycodes();
 

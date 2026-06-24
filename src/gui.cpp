@@ -155,17 +155,39 @@ static std::string summarizeMacro(const Macro& m) {
 // A final "Build" tab composes Mod-Tap / Layer-Tap / One-Shot / modded keycodes.
 static bool KcPickerBody(uint16_t& kc) {
     static char filter[32] = "";
+    static int  s_jumpTab    = -1;   // category tab index to auto-select on open; -1 = none
+    static bool s_needScroll = false;
     auto low = [](std::string s) { for (auto& c : s) if (c >= 'A' && c <= 'Z') c += 32; return s; };
 
-    if (ImGui::IsWindowAppearing()) { filter[0] = 0; ImGui::SetKeyboardFocusHere(); }
+    if (ImGui::IsWindowAppearing()) {
+        filter[0] = 0;
+        ImGui::SetKeyboardFocusHere();
+        s_jumpTab = -1;
+        s_needScroll = false;
+        const auto& cats = keycodeCategories();
+        for (int ti = 0; ti < (int)cats.size(); ti++) {
+            for (const auto& e : cats[ti].entries) {
+                if (e.second == kc) { s_jumpTab = ti; s_needScroll = true; break; }
+            }
+            if (s_jumpTab >= 0) break;
+        }
+        // Macro tab is after Build (cats.size() + 1)
+        if (s_jumpTab < 0 && g_macroCount > 0 && (kc & 0xFF00) == (QK_MACRO & 0xFF00))
+            s_jumpTab = (int)cats.size() + 1;
+    }
+
     ImGui::SetNextItemWidth(-1);
     ImGui::InputTextWithHint("##kcfilter", "filter (e.g. vol, rgb, td)", filter, sizeof(filter));
     std::string f = low(filter);
 
     bool changed = false;
     if (ImGui::BeginTabBar("##cats")) {
-        for (const auto& cat : keycodeCategories()) {
-            if (ImGui::BeginTabItem(cat.name.c_str())) {
+        const auto& cats = keycodeCategories();
+        for (int ti = 0; ti < (int)cats.size(); ti++) {
+            const auto& cat = cats[ti];
+            ImGuiTabItemFlags flags = 0;
+            if (s_jumpTab == ti) { flags = ImGuiTabItemFlags_SetSelected; s_jumpTab = -1; }
+            if (ImGui::BeginTabItem(cat.name.c_str(), nullptr, flags)) {
                 ImGui::BeginChild("##grid", ImVec2(0, 270));
                 std::vector<const std::pair<std::string, uint16_t>*> vis;
                 for (const auto& e : cat.entries)
@@ -183,8 +205,19 @@ static bool KcPickerBody(uint16_t& kc) {
                         kc = vis[i]->second; changed = true;
                         ImGui::CloseCurrentPopup();
                     }
+                    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+                        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 5.0f));
+                        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+                        ImGui::BeginTooltip();
+                        ImGui::Text("%s", descOf(vis[i]->second).c_str());
+                        ImGui::EndTooltip();
+                        ImGui::PopStyleVar(2);
+                    }
                     ImGui::PopID();
-                    if (sel) ImGui::PopStyleColor(2);
+                    if (sel) {
+                        ImGui::PopStyleColor(2);
+                        if (s_needScroll) { ImGui::SetScrollHereY(0.5f); s_needScroll = false; }
+                    }
                     // Wrap manually: stay on the row only if the next button fits.
                     if (i + 1 < vis.size()) {
                         float nextW = ImGui::CalcTextSize(vis[i + 1]->first.c_str()).x + padX;
@@ -196,26 +229,33 @@ static bool KcPickerBody(uint16_t& kc) {
                 ImGui::EndTabItem();
             }
         }
-        if (ImGui::BeginTabItem("Build")) {
+        ImGuiTabItemFlags buildFlags = 0;
+        if (s_jumpTab == (int)cats.size()) { buildFlags = ImGuiTabItemFlags_SetSelected; s_jumpTab = -1; }
+        if (ImGui::BeginTabItem("Build", nullptr, buildFlags)) {
             ImGui::BeginChild("##build", ImVec2(0, 270));
             changed |= KcBuilder(kc);
             ImGui::EndChild();
             ImGui::EndTabItem();
         }
-        if (g_macroCount > 0 && ImGui::BeginTabItem("Macro")) {
-            ImGui::BeginChild("##macrosel", ImVec2(0, 270));
-            for (int i = 0; i < g_macroCount; i++) {
-                std::string label = std::to_string(i) + ": " +
-                    (i < (int)g_macros.size() ? summarizeMacro(g_macros[i]) : "(empty)");
-                bool sel = kc == (uint16_t)(QK_MACRO + i);
-                if (ImGui::Selectable(label.c_str(), sel)) {
-                    kc = (uint16_t)(QK_MACRO + i);
-                    changed = true;
-                    ImGui::CloseCurrentPopup();
+        if (g_macroCount > 0) {
+            ImGuiTabItemFlags macroFlags = 0;
+            if (s_jumpTab == (int)cats.size() + 1) { macroFlags = ImGuiTabItemFlags_SetSelected; s_jumpTab = -1; }
+            if (ImGui::BeginTabItem("Macro", nullptr, macroFlags)) {
+                ImGui::BeginChild("##macrosel", ImVec2(0, 270));
+                for (int i = 0; i < g_macroCount; i++) {
+                    std::string label = std::to_string(i) + ": " +
+                        (i < (int)g_macros.size() ? summarizeMacro(g_macros[i]) : "(empty)");
+                    bool sel = kc == (uint16_t)(QK_MACRO + i);
+                    if (sel && s_needScroll) { ImGui::SetScrollHereY(0.5f); s_needScroll = false; }
+                    if (ImGui::Selectable(label.c_str(), sel)) {
+                        kc = (uint16_t)(QK_MACRO + i);
+                        changed = true;
+                        ImGui::CloseCurrentPopup();
+                    }
                 }
+                ImGui::EndChild();
+                ImGui::EndTabItem();
             }
-            ImGui::EndChild();
-            ImGui::EndTabItem();
         }
         ImGui::EndTabBar();
     }
@@ -380,12 +420,24 @@ static void drawKeyboard() {
             // fit label
             uint16_t kc = g_keymap[k.row][k.col];
             std::string label = nameOf(kc);
-            while (label.size() > 1 && ImGui::CalcTextSize(label.c_str()).x > w - 4)
-                label.pop_back();
+            if (ImGui::CalcTextSize(label.c_str()).x > w - 4) {
+                while (label.size() > 1 && ImGui::CalcTextSize((label + "\xe2\x80\xa6").c_str()).x > w - 4)
+                    label.pop_back();
+                label += "\xe2\x80\xa6";
+            }
 
             ImU32 tc = hl ? IM_COL32(0,0,0,255) : IM_COL32(205,210,219,255);
             ImVec2 ts = ImGui::CalcTextSize(label.c_str());
             dl->AddText({x + (w - ts.x) * 0.5f, y + (h - ts.y) * 0.5f}, tc, label.c_str());
+
+            if (hov) {
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 5.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+                ImGui::BeginTooltip();
+                ImGui::Text("%s", descOf(kc).c_str());
+                ImGui::EndTooltip();
+                ImGui::PopStyleVar(2);
+            }
         }
     }
     ImGui::EndChild();
@@ -819,12 +871,24 @@ static void drawScopePopup() {
                 if (hov && ImGui::IsMouseClicked(0)) {
                     indItemToggle(s, indKeyVal(s, k.row, k.col)); pushInd(g_scopeOpen);
                 }
-                std::string label = nameOf(g_keymap[k.row][k.col]);
-                while (label.size() > 1 && ImGui::CalcTextSize(label.c_str()).x > w - 4)
-                    label.pop_back();
+                uint16_t skc = g_keymap[k.row][k.col];
+                std::string label = nameOf(skc);
+                if (ImGui::CalcTextSize(label.c_str()).x > w - 4) {
+                    while (label.size() > 1 && ImGui::CalcTextSize((label + "\xe2\x80\xa6").c_str()).x > w - 4)
+                        label.pop_back();
+                    label += "\xe2\x80\xa6";
+                }
                 ImVec2 ts = ImGui::CalcTextSize(label.c_str());
                 dl->AddText({x + (w - ts.x) * 0.5f, y + (h - ts.y) * 0.5f},
                             IM_COL32(205, 210, 219, 255), label.c_str());
+                if (hov) {
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 5.0f));
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+                    ImGui::BeginTooltip();
+                    ImGui::Text("%s", descOf(skc).c_str());
+                    ImGui::EndTooltip();
+                    ImGui::PopStyleVar(2);
+                }
             }
         }
         ImGui::EndChild();
@@ -1290,7 +1354,7 @@ static float drawTitleBar(GLFWwindow* win) {
     dl->AddLine(ImVec2(p0.x, p1.y - 1.0f), ImVec2(p1.x, p1.y - 1.0f),
                 ImGui::GetColorU32(ImGuiCol_Border));
 
-    const char* title = "Keychron Q1 Pro Config";
+    const char* title = "Smial";
     ImVec2 ts = ImGui::CalcTextSize(title);
     dl->AddText(ImVec2(p0.x + 12.0f, p0.y + (barH - ts.y) * 0.5f),
                 ImGui::GetColorU32(ImGuiCol_Text), title);
@@ -1358,7 +1422,7 @@ int gui_main() {
 #endif
     // Height accounts for the custom title bar + content margins (the OS frame
     // used to sit outside the client area; ours lives inside it).
-    GLFWwindow* win = glfwCreateWindow(900, 800, "Keychron Q1 Pro Config", nullptr, nullptr);
+    GLFWwindow* win = glfwCreateWindow(900, 800, "Smial", nullptr, nullptr);
     if (!win) { glfwTerminate(); return 1; }
 #ifdef _WIN32
     // Round the borderless window's corners (Windows 11; harmless no-op on Win10).

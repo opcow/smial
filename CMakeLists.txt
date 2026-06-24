@@ -1,7 +1,7 @@
 # Must be set before cmake_minimum_required so sub-projects with old min-version don't error
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 cmake_minimum_required(VERSION 3.20)
-project(q1config CXX)
+project(smial CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -70,8 +70,8 @@ FetchContent_Declare(nfd
 )
 FetchContent_MakeAvailable(nfd)
 
-# ── q1config ──────────────────────────────────────────────────────────────────
-add_executable(q1config
+# ── smial ─────────────────────────────────────────────────────────────────────
+add_executable(smial
   src/main.cpp
   src/hid.cpp
   src/protocol.cpp
@@ -82,7 +82,7 @@ add_executable(q1config
   src/cli.cpp
 )
 
-target_include_directories(q1config PRIVATE src)
+target_include_directories(smial PRIVATE src)
 
 # hidapi exports platform-specific targets; pick the right one
 if(WIN32)
@@ -94,7 +94,7 @@ else()
   set(HIDAPI_TARGET hidapi::hidraw)
 endif()
 
-target_link_libraries(q1config PRIVATE
+target_link_libraries(smial PRIVATE
   imgui_lib
   ${HIDAPI_TARGET}
   nlohmann_json::nlohmann_json
@@ -104,24 +104,24 @@ target_link_libraries(q1config PRIVATE
 
 if(WIN32)
   # setupapi needed by hidapi on Windows; dwmapi for rounded-corner window attribute
-  target_link_libraries(q1config PRIVATE setupapi dwmapi)
+  target_link_libraries(smial PRIVATE setupapi dwmapi)
   # Windows subsystem (no console ever created); CLI re-attaches via AttachConsole
-  set_target_properties(q1config PROPERTIES WIN32_EXECUTABLE TRUE)
-  target_link_options(q1config PRIVATE /ENTRY:mainCRTStartup)
+  set_target_properties(smial PROPERTIES WIN32_EXECUTABLE TRUE)
+  target_link_options(smial PRIVATE /ENTRY:mainCRTStartup)
   # copy hidapi.dll next to the exe after build
-  add_custom_command(TARGET q1config POST_BUILD
+  add_custom_command(TARGET smial POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
       $<TARGET_FILE:hidapi::winapi>
-      $<TARGET_FILE_DIR:q1config>
+      $<TARGET_FILE_DIR:smial>
   )
 elseif(APPLE)
   # hidapi on macOS needs IOKit and CoreFoundation
-  target_link_libraries(q1config PRIVATE
+  target_link_libraries(smial PRIVATE
     "-framework IOKit"
     "-framework CoreFoundation"
   )
   # Suppress macOS OpenGL deprecation warnings (OpenGL still works, just deprecated since 10.14)
-  target_compile_definitions(q1config PRIVATE GL_SILENCE_DEPRECATION)
+  target_compile_definitions(smial PRIVATE GL_SILENCE_DEPRECATION)
 else()
   # Linux: hidapi uses the hidraw backend (install libudev-dev)
   # nfd uses GTK3 (install libgtk-3-dev) or xdg-desktop-portal

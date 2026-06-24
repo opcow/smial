@@ -15,13 +15,13 @@ static HidDevice dev;
 
 static bool connect() {
     if (dev.open()) return true;
-    fprintf(stderr, "error: Q1 Pro not found (VID 3434 PID 0610)\n");
+    fprintf(stderr, "error: Keychron device not found (VID 3434 PID 0610)\n");
     return false;
 }
 
 static void usage() {
     puts(
-        "Usage: q1config <command> [args]\n"
+        "Usage: smial <command> [args]\n"
         "\n"
         "  tt [ms]              get or set tapping term\n"
         "  features             show feature flags and timing params\n"
@@ -121,7 +121,7 @@ int cli_main(int argc, char* argv[]) {
     }
 
     if (!strcmp(cmd, "combo")) {
-        if (argc < 4) { fprintf(stderr,"usage: q1config combo <i> off|<out> <k1> <k2> [k3] [k4]\n"); return 1; }
+        if (argc < 4) { fprintf(stderr,"usage: smial combo <i> off|<out> <k1> <k2> [k3] [k4]\n"); return 1; }
         if (!connect()) return 1;
         int i = atoi(argv[2]);
         if (i < 0 || i >= COMBO_SLOT_COUNT) { fprintf(stderr,"combo: index out of range\n"); return 1; }
@@ -161,7 +161,7 @@ int cli_main(int argc, char* argv[]) {
     }
 
     if (!strcmp(cmd, "override")) {
-        if (argc < 4) { fprintf(stderr,"usage: q1config override <i> off|<trig> <repl> [mods] [layers]\n"); return 1; }
+        if (argc < 4) { fprintf(stderr,"usage: smial override <i> off|<trig> <repl> [mods] [layers]\n"); return 1; }
         if (!connect()) return 1;
         int i = atoi(argv[2]);
         if (i < 0 || i >= KO_SLOT_COUNT) { fprintf(stderr,"override: index out of range\n"); return 1; }
@@ -238,7 +238,7 @@ int cli_main(int argc, char* argv[]) {
     }
 
     if (!strcmp(cmd, "load")) {
-        if (argc < 3) { fprintf(stderr,"usage: q1config load <file>\n"); return 1; }
+        if (argc < 3) { fprintf(stderr,"usage: smial load <file>\n"); return 1; }
         if (!connect()) return 1;
         std::ifstream f(argv[2]);
         if (!f) { fprintf(stderr,"cannot open %s\n", argv[2]); return 1; }
@@ -287,6 +287,6 @@ int cli_main(int argc, char* argv[]) {
         return 0;
     }
 
-    fprintf(stderr, "Unknown command: %s  (try 'q1config help')\n", cmd);
+    fprintf(stderr, "Unknown command: %s  (try 'smial help')\n", cmd);
     return 1;
 }

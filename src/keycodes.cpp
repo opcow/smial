@@ -7,6 +7,7 @@
 
 static std::unordered_map<std::string, uint16_t> KC;
 static std::vector<std::pair<std::string, uint16_t>> ENTRIES;
+static std::unordered_map<uint16_t, std::string> DESC;
 
 static void buildTables() {
     if (!KC.empty()) return;
@@ -293,4 +294,107 @@ const std::vector<KcCategory>& keycodeCategories() {
         if (!cat.entries.empty()) CATS.push_back(std::move(cat));
     }
     return CATS;
+}
+
+// Expand 5-bit mod field to full modifier names for use in descriptions.
+static std::string mods5ToDesc(uint8_t mods) {
+    static const char* L[4] = {"Left Control","Left Shift","Left Alt","Left GUI"};
+    static const char* R[4] = {"Right Control","Right Shift","Right Alt","Right GUI"};
+    bool right = mods & 0x10;
+    std::string s;
+    for (int i = 0; i < 4; i++)
+        if (mods & (1 << i)) { if (!s.empty()) s += "+"; s += right ? R[i] : L[i]; }
+    return s.empty() ? "none" : s;
+}
+
+static void buildDesc() {
+    if (!DESC.empty()) return;
+    buildTables();
+    auto d = [](const char* name, const char* desc) {
+        auto it = KC.find(name);
+        if (it != KC.end()) DESC[it->second] = desc;
+    };
+    // Navigation / editing
+    d("TRNS","Transparent (pass-through)"); d("NO","No key (blocked)");
+    d("ENT","Enter");    d("ESC","Escape");    d("BSPC","Backspace");
+    d("TAB","Tab");      d("SPC","Space");      d("CAPS","Caps Lock");
+    d("PSCR","Print Screen"); d("SCRL","Scroll Lock"); d("PAUS","Pause/Break");
+    d("INS","Insert");   d("HOME","Home");      d("PGUP","Page Up");
+    d("DEL","Delete");   d("END","End");        d("PGDN","Page Down");
+    d("RGHT","Right Arrow"); d("LEFT","Left Arrow"); d("DOWN","Down Arrow");
+    d("UP","Up Arrow");  d("NUM","Num Lock");
+    // Symbols — basic
+    d("MINS","- (Minus)");    d("EQL","= (Equals)");     d("LBRC","[ (Left Bracket)");
+    d("RBRC","] (Right Bracket)"); d("BSLS","\\ (Backslash)"); d("SCLN","; (Semicolon)");
+    d("QUOT","' (Single Quote)"); d("GRV","` (Grave/Backtick)"); d("COMM",", (Comma)");
+    d("DOT",". (Period)"); d("SLSH","/ (Slash)");
+    // Symbols — shifted
+    d("COLN",": (Colon)");    d("EXLM","! (Exclamation)"); d("AT","@ (At)");
+    d("HASH","# (Hash)");     d("DLR","$ (Dollar)");     d("PERC","% (Percent)");
+    d("CIRC","^ (Caret)");    d("AMPR","& (Ampersand)"); d("ASTR","* (Asterisk)");
+    d("LPRN","( (Left Paren)"); d("RPRN",") (Right Paren)"); d("UNDS","_ (Underscore)");
+    d("PLUS","+ (Plus)");     d("LCBR","{ (Left Brace)"); d("RCBR","} (Right Brace)");
+    d("PIPE","| (Pipe)");     d("DQUO","\" (Double Quote)"); d("TILD","~ (Tilde)");
+    d("LT","< (Less Than)");  d("GT","> (Greater Than)"); d("QUES","? (Question Mark)");
+    // Modifiers
+    d("LCTL","Left Control"); d("LSFT","Left Shift");  d("LALT","Left Alt");
+    d("LGUI","Left GUI (Win/Cmd)"); d("RCTL","Right Control"); d("RSFT","Right Shift");
+    d("RALT","Right Alt / AltGr");  d("RGUI","Right GUI (Win/Cmd)");
+    // Media / consumer
+    d("PWR","Power");   d("SLEP","Sleep");  d("WAKE","Wake");
+    d("MUTE","Mute");   d("VOLU","Volume Up"); d("VOLD","Volume Down");
+    d("MNXT","Next Track"); d("MPRV","Previous Track"); d("MSTP","Stop Media");
+    d("MPLY","Play/Pause"); d("MSEL","Media Select");   d("EJCT","Eject");
+    d("MAIL","Open Mail");  d("CALC","Calculator");     d("MYCM","My Computer");
+    d("WSCH","Web Search"); d("WHOM","Web Home");       d("WBAK","Web Back");
+    d("WFWD","Web Forward"); d("WSTP","Web Stop");      d("WREF","Web Refresh");
+    d("WFAV","Web Favorites"); d("MFFD","Fast Forward"); d("MRWD","Rewind");
+    d("BRIU","Brightness Up"); d("BRID","Brightness Down");
+    d("CPNL","Control Panel"); d("ASST","Assistant");
+    d("MCTL","Mission Control"); d("LPAD","Launchpad");
+    // RGB lighting
+    d("RGB_TOG","RGB Toggle");       d("RGB_MOD","RGB Mode +");    d("RGB_RMOD","RGB Mode -");
+    d("RGB_HUI","RGB Hue +");        d("RGB_HUD","RGB Hue -");
+    d("RGB_SAI","RGB Saturation +"); d("RGB_SAD","RGB Saturation -");
+    d("RGB_VAI","RGB Brightness +"); d("RGB_VAD","RGB Brightness -");
+    d("RGB_SPI","RGB Speed +");      d("RGB_SPD","RGB Speed -");
+    // Special / QMK
+    d("CW_TOGG","Caps Word Toggle"); d("QK_LOCK","Key Lock (hold until re-pressed)");
+    d("QK_BOOT","Enter Bootloader (DFU)"); d("NK_TOGG","N-Key Rollover Toggle");
+    d("AS_ON","Auto-Shift On");    d("AS_OFF","Auto-Shift Off"); d("AS_TOGG","Auto-Shift Toggle");
+    d("AS_UP","Auto-Shift Timeout +"); d("AS_DOWN","Auto-Shift Timeout -"); d("AS_RPT","Auto-Shift Repeat");
+    // Keychron custom
+    d("LOpt","Left Option (Mac)");   d("ROpt","Right Option (Mac)");
+    d("LCmd","Left Command (Mac)");  d("RCmd","Right Command (Mac)");
+    d("MCtrl","Mission Control");    d("LPad","Launchpad");
+    d("Task","Task View (Windows)"); d("File","File Explorer");
+    d("SShot","Screenshot");  d("Cortana","Cortana"); d("Siri","Siri");
+    d("BT1","Bluetooth 1");   d("BT2","Bluetooth 2"); d("BT3","Bluetooth 3");
+    d("Batt","Battery Level");
+}
+
+std::string descOf(uint16_t code) {
+    buildDesc();
+    if (code >= 0x5700 && code <= 0x57FF)
+        return "Tap-Dance slot " + std::to_string(code & 0xFF);
+    if (code >= QK_MACRO && code <= QK_MACRO + 0xFF)
+        return "Macro slot " + std::to_string(code - QK_MACRO);
+    switch (code & 0xFFE0) {
+        case 0x5200: return "Activate Layer "   + std::to_string(code & 0x1F);
+        case 0x5220: return "Momentary Layer "  + std::to_string(code & 0x1F);
+        case 0x5240: return "Set Default Layer "+ std::to_string(code & 0x1F);
+        case 0x5260: return "Toggle Layer "     + std::to_string(code & 0x1F);
+        case 0x5280: return "One-Shot Layer "   + std::to_string(code & 0x1F);
+        case 0x52A0: return "One-Shot Mod: "    + mods5ToDesc(code & 0x1F);
+        case 0x52C0: return "Tap-Toggle Layer " + std::to_string(code & 0x1F);
+    }
+    auto it = DESC.find(code);
+    if (it != DESC.end()) return it->second;
+    if (code >= QK_MOD_TAP && code <= 0x3FFF)
+        return "Mod-Tap: " + mods5ToDesc((code >> 8) & 0x1F) + " / " + descOf(code & 0xFF);
+    if (code >= QK_LAYER_TAP && code <= 0x4FFF)
+        return "Layer-Tap: Layer " + std::to_string((code >> 8) & 0xF) + " / " + descOf(code & 0xFF);
+    if (code >= QK_MODS && code <= 0x1FFF)
+        return mods5ToDesc((code >> 8) & 0x1F) + " + " + descOf(code & 0xFF);
+    return nameOf(code);
 }

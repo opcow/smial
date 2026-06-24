@@ -19,13 +19,13 @@ jobs:
         include:
           - os: windows-latest
             name: windows
-            archive: q1config-windows.zip
+            archive: smial-windows.zip
           - os: macos-latest
             name: macos
-            archive: q1config-macos.tar.gz
+            archive: smial-macos.tar.gz
           - os: ubuntu-latest
             name: linux
-            archive: q1config-linux.tar.gz
+            archive: smial-linux.tar.gz
 
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +53,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist | Out-Null
-          Copy-Item build/Release/q1config.exe dist/
+          Copy-Item build/Release/smial.exe dist/
           Copy-Item build/Release/hidapi.dll   dist/
           Compress-Archive -Path dist/* -DestinationPath ${{ matrix.archive }}
 
@@ -61,7 +61,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           mkdir dist
-          cp build/q1config dist/
+          cp build/smial dist/
           tar -czf ${{ matrix.archive }} -C dist .
 
       - name: Upload to release

@@ -1,7 +1,7 @@
 # rtcfg firmware
 
 Prebuilt QMK firmware with the **runtime-config (rtcfg)** interface that the
-[q1config](../README.md) tools (CLI + WebHID GUI) drive: tap dance, combos, key
+[Smial](../README.md) tools (CLI + WebHID GUI) drive: tap dance, combos, key
 overrides, tap-hold timing, Caps Word, Auto Shift, one-shot, debounce, and RGB
 state indicators — all configurable live over USB, no reflash. See
 [PORTING.md](../PORTING.md) for how it works and [PROTOCOL.md](../PROTOCOL.md)

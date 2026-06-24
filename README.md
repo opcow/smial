@@ -1,10 +1,10 @@
-# q1config
+# Smial
 
-Live page: <https://opcow.github.io/q1config/>
+Live page: <https://opcow.github.io/smial/>
 
-Repository: <https://github.com/opcow/q1config>
+Repository: <https://github.com/opcow/smial>
 
-Host-side configuration tools for a customized **Keychron Q1 Pro** (ANSI knob) running a
+Host-side configuration tools for Keychron keyboards running a
 QMK `rtcfg` keymap that exposes a raw-HID runtime-config interface (command byte `0xAC`).
 Change tap dance, tapping term, Caps Word, Auto Shift, combos, key overrides, key assignments,
 macros, RGB lighting, and RGB state indicators **at runtime** — no recompile/reflash — and
@@ -21,14 +21,14 @@ save/load configurations as files.
 
 Three front-ends over the same protocol:
 
-- **`q1config`** — a native desktop GUI (C++ / Dear ImGui) with a graphical keyboard, a
+- **`smial`** — a native desktop GUI (C++ / Dear ImGui) with a graphical keyboard, a
   categorized keycode picker, tap-dance editor, combo and key-override editors, timing,
   indicator, lighting, and macro controls, and presets. The same binary doubles as a
   command-line tool when given arguments. No Python needed.
-- **`q1config.html`** — a single-file browser GUI (WebHID; Chrome/Edge) with a graphical
+- **`smial.html`** — a single-file browser GUI (WebHID; Chrome/Edge) with a graphical
   keyboard, key remapping, tap-dance editor, combo and key-override editors, sliders/toggles,
   color pickers, and lighting and macro editors, and presets.
-- **`q1config.py`** — command-line tool (Python + `hidapi`).
+- **`smial.py`** — command-line tool (Python + `hidapi`).
 
 > Companion firmware: the `rtcfg` keymap in the QMK tree —
 > [opcow/qmk_firmware @ raw-hid-config](https://github.com/opcow/qmk_firmware/tree/raw-hid-config/keyboards/keychron/q1_pro/ansi_knob/keymaps/rtcfg)
@@ -60,7 +60,7 @@ Browser GUI:
 
 ## Native app
 
-Build the single `q1config` binary (it is both the GUI and the CLI):
+Build the single `smial` binary (it is both the GUI and the CLI):
 
 ```powershell
 cmake -B build
@@ -70,8 +70,8 @@ cmake --build build --config Release
 Run it with **no arguments** to launch the desktop GUI:
 
 ```powershell
-build\Release\q1config.exe        # Windows
-./build/q1config                  # macOS/Linux
+build\Release\smial.exe        # Windows
+./build/smial                  # macOS/Linux
 ```
 
 Connect the keyboard and use the **Keyboard / Features / Tap Dance / Timing / Combos /
@@ -82,39 +82,39 @@ the other front-ends.
 Pass a **command** to use the same binary as a CLI instead of opening the window:
 
 ```powershell
-q1config features          # feature flags + timing params
-q1config tt 220            # set tapping term (ms)
-q1config td 64             # show tap-dance slots (default 8, max 64)
-q1config indicators        # RGB indicator states
-q1config keymap 4 dump.txt # dump 4 layers' keycodes to a file
-q1config save work.json    # snapshot config to a JSON preset
-q1config load work.json    # apply a preset
-q1config reset             # config back to firmware defaults
-q1config reset-keymap      # full keymap back to firmware defaults
+smial features          # feature flags + timing params
+smial tt 220            # set tapping term (ms)
+smial td 64             # show tap-dance slots (default 8, max 64)
+smial indicators        # RGB indicator states
+smial keymap 4 dump.txt # dump 4 layers' keycodes to a file
+smial save work.json    # snapshot config to a JSON preset
+smial load work.json    # apply a preset
+smial reset             # config back to firmware defaults
+smial reset-keymap      # full keymap back to firmware defaults
 ```
 
-Run `q1config help` for the full command list. (On Windows the GUI build is a windowed
+Run `smial help` for the full command list. (On Windows the GUI build is a windowed
 binary; when run with a command it re-attaches to the parent console for output.)
 
 ## Python CLI
 
 ```powershell
-python q1config.py            # show global config
-python q1config.py list       # all tap-dance slots
-python q1config.py tt 220     # set tapping term (ms)
-python q1config.py mode 3 hold; python q1config.py en 3 1   # ;/: tap-hold
-python q1config.py indicator capslock on #ff0000            # red Caps Lock
-python q1config.py id          # press a key -> prints its row/col
-python q1config.py assign 2 3 10 5   # make a key trigger tap-dance slot 5
+python smial.py            # show global config
+python smial.py list       # all tap-dance slots
+python smial.py tt 220     # set tapping term (ms)
+python smial.py mode 3 hold; python smial.py en 3 1   # ;/: tap-hold
+python smial.py indicator capslock on #ff0000          # red Caps Lock
+python smial.py id          # press a key -> prints its row/col
+python smial.py assign 2 3 10 5   # make a key trigger tap-dance slot 5
 
 # presets (JSON files in ./presets/)
-python q1config.py presets    # list
-python q1config.py save work  # snapshot current config -> presets/work.json
-python q1config.py load mine  # apply a preset (writes only what differs)
-python q1config.py mine       # alias for `load mine`
+python smial.py presets    # list
+python smial.py save work  # snapshot current config -> presets/work.json
+python smial.py load mine  # apply a preset (writes only what differs)
+python smial.py mine       # alias for `load mine`
 ```
 
-Run `python q1config.py help` (or any unknown command) to see the full command list.
+Run `python smial.py help` (or any unknown command) to see the full command list.
 
 ## Browser GUI
 
@@ -124,7 +124,7 @@ WebHID requires a secure context, so serve over `localhost` (a plain `file://` o
 python -m http.server 8000
 ```
 
-Then open **<http://localhost:8000/q1config.html>** in Edge/Chrome, click **Connect**, and
+Then open **<http://localhost:8000/smial.html>** in Edge/Chrome, click **Connect**, and
 authorize the keyboard. Save/Load presets use browser download / file picker; the JSON
 format is identical to the other front-ends', so preset files are interchangeable.
 
