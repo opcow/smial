@@ -18,6 +18,7 @@ public:
 
     // Blocking 32-byte request/reply, 1500 ms timeout. Throws on error.
     std::array<uint8_t, 32> xfer(std::initializer_list<uint8_t> payload);
+    std::array<uint8_t, 32> xfer(const uint8_t* data, size_t len);
 
     // Non-blocking read (timeout=0). Returns false if no data available.
     bool tryRead(std::array<uint8_t, 32>& out);

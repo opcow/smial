@@ -1,5 +1,7 @@
 #pragma once
 #include <cstdint>
+#include <string>
+#include <vector>
 #include "hid.h"
 
 static constexpr uint8_t CMD = 0xAC;
@@ -69,3 +71,44 @@ const char* const* modMaskNames();  // 8 entries
 uint16_t viaGet(HidDevice& d, int layer, int row, int col);
 void     viaSet(HidDevice& d, int layer, int row, int col, uint16_t kc);
 void     viaKmReset(HidDevice& d);
+
+// VIA RGB Matrix — channel-based protocol (via.c id_custom_get/set_value 0x07/0x08/0x09)
+// Packet format: [cmd, channel=0x03, value_id, data...]
+// Response:      [cmd, channel, value_id, data[0], data[1], ...]
+static constexpr uint8_t VIA_RGB_CHAN     = 0x03;
+static constexpr uint8_t VIA_RGB_VAL_ID  = 0x01;  // brightness (val)
+static constexpr uint8_t VIA_RGB_MODE_ID = 0x02;  // effect/mode
+static constexpr uint8_t VIA_RGB_SPD_ID  = 0x03;  // speed
+static constexpr uint8_t VIA_RGB_COL_ID  = 0x04;  // hue+sat packed (2 bytes)
+struct ViaLightState { uint8_t mode, hue, sat, val, speed; };
+ViaLightState getLighting(HidDevice& d);
+void          setLightMode (HidDevice& d, uint8_t mode);
+void          setLightVal  (HidDevice& d, uint8_t val);
+void          setLightSpeed(HidDevice& d, uint8_t speed);
+void          setLightColor(HidDevice& d, uint8_t hue, uint8_t sat);
+void          saveLighting (HidDevice& d);
+
+// VIA macros (via.c 0x0C–0x10)
+// Buffer format: QMK SS strings — raw ASCII for text; 0x01 prefix for actions:
+//   Tap:   0x01 0x01 <hid_usage>          (3 bytes)
+//   Down:  0x01 0x02 <hid_usage>          (3 bytes)
+//   Up:    0x01 0x03 <hid_usage>          (3 bytes)
+//   Delay: 0x01 0x04 <decimal_digits> '|' (variable)
+// Each macro ends with 0x00. Text uses 1-byte HID usage for keycodes.
+enum class MacroOp : uint8_t { Text=0, Tap=1, Down=2, Up=3, Delay=4 };
+struct MacroStep {
+    MacroOp  op    = MacroOp::Text;
+    uint8_t  kc    = 0;    // HID usage (1-byte) for Tap/Down/Up
+    uint16_t delay = 0;    // ms for Delay
+    std::string text;      // for Text
+};
+using Macro = std::vector<MacroStep>;
+
+int  viaMacroGetCount(HidDevice& d);
+int  viaMacroGetBufSize(HidDevice& d);
+std::vector<uint8_t> viaMacroGetBuf(HidDevice& d, int bufSize);
+void viaMacroSetBuf(HidDevice& d, const std::vector<uint8_t>& data);
+void viaMacroReset(HidDevice& d);
+
+std::vector<Macro>    parseMacros(const std::vector<uint8_t>& buf, int count);
+std::vector<uint8_t>  serializeMacros(const std::vector<Macro>& macros, int count, int bufSize);

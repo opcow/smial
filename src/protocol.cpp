@@ -1,5 +1,7 @@
 #include "protocol.h"
+#include <algorithm>
 #include <cstring>
+#include <string>
 
 static const char* const DB_METHODS[] = {"none", "sym_defer_g", "sym_eager_pk", "asym_eager_defer_pk"};
 static constexpr int DB_METHOD_COUNT = 4;
@@ -102,6 +104,119 @@ void setKo(HidDevice& d, int i, const KeyOverride& k) {
 const char* const* modMaskNames() {
     static const char* const N[8] = {"LCtl","LSft","LAlt","LGui","RCtl","RSft","RAlt","RGui"};
     return N;
+}
+
+// ── VIA lighting ──────────────────────────────────────────────────────────────
+// Channel-based protocol: [cmd, 0x03, value_id, data...]  reply[3] = first data byte.
+static uint8_t rgbGet1(HidDevice& d, uint8_t vid) {
+    return d.xfer({0x08, VIA_RGB_CHAN, vid})[3];
+}
+ViaLightState getLighting(HidDevice& d) {
+    auto r = d.xfer({0x08, VIA_RGB_CHAN, VIA_RGB_COL_ID});  // hue+sat together
+    return { rgbGet1(d, VIA_RGB_MODE_ID), r[3], r[4],
+             rgbGet1(d, VIA_RGB_VAL_ID),  rgbGet1(d, VIA_RGB_SPD_ID) };
+}
+void setLightMode (HidDevice& d, uint8_t m)            { d.xfer({0x07, VIA_RGB_CHAN, VIA_RGB_MODE_ID, m}); }
+void setLightVal  (HidDevice& d, uint8_t v)            { d.xfer({0x07, VIA_RGB_CHAN, VIA_RGB_VAL_ID,  v}); }
+void setLightSpeed(HidDevice& d, uint8_t s)            { d.xfer({0x07, VIA_RGB_CHAN, VIA_RGB_SPD_ID,  s}); }
+void setLightColor(HidDevice& d, uint8_t h, uint8_t s) { d.xfer({0x07, VIA_RGB_CHAN, VIA_RGB_COL_ID, h, s}); }
+void saveLighting (HidDevice& d)                       { d.xfer({0x09, VIA_RGB_CHAN}); }
+
+// ── VIA macros ────────────────────────────────────────────────────────────────
+int viaMacroGetCount(HidDevice& d)   { return d.xfer({0x0C})[1]; }
+int viaMacroGetBufSize(HidDevice& d) { auto r = d.xfer({0x0D}); return (r[1] << 8) | r[2]; }
+
+std::vector<uint8_t> viaMacroGetBuf(HidDevice& d, int bufSize) {
+    std::vector<uint8_t> buf(bufSize, 0);
+    for (int off = 0; off < bufSize; ) {
+        int sz = std::min(28, bufSize - off);
+        auto r = d.xfer({0x0E, (uint8_t)(off >> 8), (uint8_t)(off & 0xFF), (uint8_t)sz});
+        for (int i = 0; i < sz; i++) buf[off + i] = r[4 + i];
+        off += sz;
+    }
+    return buf;
+}
+
+void viaMacroSetBuf(HidDevice& d, const std::vector<uint8_t>& data) {
+    int total = (int)data.size();
+    for (int off = 0; off < total; ) {
+        int sz = std::min(28, total - off);
+        uint8_t pkt[32] = {0x0F, (uint8_t)(off >> 8), (uint8_t)(off & 0xFF), (uint8_t)sz};
+        for (int i = 0; i < sz; i++) pkt[4 + i] = data[off + i];
+        d.xfer(pkt, 32);
+        off += sz;
+    }
+}
+
+void viaMacroReset(HidDevice& d) { d.xfer({0x10}); }
+
+// Parse the flat macro buffer into per-macro action lists.
+// Format: raw ASCII → Text; 0x01 prefix → action (Tap/Down/Up/Delay); 0x00 → end of macro.
+std::vector<Macro> parseMacros(const std::vector<uint8_t>& buf, int count) {
+    std::vector<Macro> macros(count);
+    int pos = 0, n = (int)buf.size();
+    for (int m = 0; m < count && pos < n; m++) {
+        Macro& mac = macros[m];
+        std::string textAcc;  // accumulate consecutive ASCII chars into one Text step
+        while (pos < n) {
+            uint8_t b = buf[pos++];
+            if (b == 0x00) {  // end of this macro
+                if (!textAcc.empty()) { mac.push_back({MacroOp::Text,0,0,textAcc}); textAcc.clear(); }
+                break;
+            }
+            if (b == 0x01) {  // SS_QMK_PREFIX
+                if (!textAcc.empty()) { mac.push_back({MacroOp::Text,0,0,textAcc}); textAcc.clear(); }
+                if (pos >= n) break;
+                uint8_t code = buf[pos++];
+                if (code == 0x01 || code == 0x02 || code == 0x03) {  // Tap/Down/Up
+                    if (pos >= n) break;
+                    uint8_t kc = buf[pos++];
+                    mac.push_back({(MacroOp)code, kc, 0, {}});
+                } else if (code == 0x04) {  // Delay — decimal digits then '|'
+                    std::string digits;
+                    while (pos < n && buf[pos] != '|') digits += (char)buf[pos++];
+                    if (pos < n) pos++;  // skip '|'
+                    uint16_t ms = digits.empty() ? 0 : (uint16_t)std::stoi(digits);
+                    mac.push_back({MacroOp::Delay, 0, ms, {}});
+                }
+            } else {
+                textAcc += (char)b;  // plain ASCII — accumulate
+            }
+        }
+        if (!textAcc.empty()) { mac.push_back({MacroOp::Text,0,0,textAcc}); textAcc.clear(); }
+    }
+    return macros;
+}
+
+// Serialize macro action lists back into the flat buffer.
+std::vector<uint8_t> serializeMacros(const std::vector<Macro>& macros, int count, int bufSize) {
+    std::vector<uint8_t> buf(bufSize, 0);
+    int pos = 0;
+    for (int m = 0; m < count; m++) {
+        if (m < (int)macros.size()) {
+            for (const auto& s : macros[m]) {
+                if (s.op == MacroOp::Text) {
+                    for (char c : s.text) {
+                        if (pos >= bufSize - 1) goto done;
+                        buf[pos++] = (uint8_t)c;
+                    }
+                } else if (s.op == MacroOp::Delay) {
+                    std::string ds = std::to_string(s.delay);
+                    if (pos + 2 + (int)ds.size() >= bufSize) goto done;
+                    buf[pos++] = 0x01; buf[pos++] = 0x04;
+                    for (char c : ds) buf[pos++] = (uint8_t)c;
+                    buf[pos++] = '|';
+                } else {
+                    if (pos + 2 >= bufSize) goto done;
+                    buf[pos++] = 0x01; buf[pos++] = (uint8_t)s.op; buf[pos++] = s.kc;
+                }
+            }
+        }
+        if (pos >= bufSize) goto done;
+        buf[pos++] = 0x00;  // macro terminator
+    }
+done:
+    return buf;
 }
 
 uint16_t viaGet(HidDevice& d, int l, int row, int col) {

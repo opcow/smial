@@ -177,15 +177,57 @@
   "indicators": [
     {
       "color": "#FF0000",
-      "enabled": true
+      "enabled": true,
+      "items": [],
+      "scope": "board"
     },
     {
       "color": "#00A000",
-      "enabled": true
+      "enabled": true,
+      "items": [],
+      "scope": "board"
     },
     {
       "color": "#808000",
-      "enabled": true
+      "enabled": true,
+      "items": [],
+      "scope": "board"
+    },
+    {
+      "color": "#800080",
+      "enabled": false,
+      "items": [],
+      "scope": "board"
+    },
+    {
+      "color": "#FF6000",
+      "enabled": false,
+      "items": [],
+      "scope": "board"
+    },
+    {
+      "color": "#008080",
+      "enabled": false,
+      "items": [],
+      "scope": "board"
+    },
+    {
+      "color": "#808000",
+      "enabled": false,
+      "items": [],
+      "scope": "board"
+    },
+    {
+      "color": "#C0C0C0",
+      "enabled": false,
+      "items": [],
+      "scope": "board"
+    },
+    {
+      "color": "#0040FF",
+      "enabled": false,
+      "items": [],
+      "scope": "board"
     }
   ],
   "key_overrides": [

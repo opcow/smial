@@ -114,6 +114,8 @@
     <button data-tab="combos">Combos</button>
     <button data-tab="overrides">Key Overrides</button>
     <button data-tab="indicators">Indicators</button>
+    <button data-tab="lighting">Lighting</button>
+    <button data-tab="macros">Macros</button>
   </div>
 
   <div class="tabpanel on" data-tab="keyboard">
@@ -177,6 +179,16 @@
   <div class="tabpanel" data-tab="indicators">
     <h2>Indicators</h2>
     <div class="panel" id="indicators"></div>
+  </div>
+
+  <div class="tabpanel" data-tab="lighting">
+    <h2>Lighting</h2>
+    <div class="panel" id="lighting"></div>
+  </div>
+
+  <div class="tabpanel" data-tab="macros">
+    <h2>Macros</h2>
+    <div class="panel" id="macros"></div>
   </div>
 
   <h2>Presets</h2>
@@ -248,7 +260,7 @@ for(let i=0;i<4;i++) KC["OSM("+["LCTL","LSFT","LALT","LGUI"][i]+")"]=0x52A0|(1<<
 for(let l=0;l<8;l++) KC["OSL("+l+")"]=0x5280|l;
 for(let i=0;i<32;i++)KC["TD"+i]=0x5700|i;
 // QMK keycode-range bases for MT/LT/OSM/modded forms.
-const QK_MODS=0x0100, QK_MOD_TAP=0x2000, QK_LAYER_TAP=0x4000, QK_OSM=0x52A0;
+const QK_MODS=0x0100, QK_MOD_TAP=0x2000, QK_LAYER_TAP=0x4000, QK_OSM=0x52A0, QK_MACRO=0x7700;
 // 8-bit modifier-mask bit names for key-override mods (QMK MOD_* order).
 const MOD_MASK_NAMES=["LCtl","LSft","LAlt","LGui","RCtl","RSft","RAlt","RGui"];
 // 5-bit packed mod field (bits 0-3 CSAG, bit4 right) <-> "+"-joined tokens.
@@ -264,6 +276,7 @@ function listToMask(arr){ let m=0; for(const nm of arr||[]){ const i=MOD_MASK_NA
 const ENTRIES=[]; const seenCode=new Set();
 for(const [n,c] of Object.entries(KC)){ if(seenCode.has(c))continue; seenCode.add(c); ENTRIES.push([n,c]); }
 function nameOf(code){ if(code>=0x5700&&code<=0x57FF) return "TD"+(code&0xFF);
+  if(code>=QK_MACRO&&code<=QK_MACRO+0xFF) return "MACRO"+(code&0xFF);
   switch(code&0xFFE0){
     case 0x5200: return "TO("+(code&0x1F)+")";
     case 0x5220: return "MO("+(code&0x1F)+")";
@@ -320,8 +333,13 @@ function pickKeycode(cur, title){
     const selectTab=(cat,btn)=>{ [...tabs.children].forEach(x=>x.className="");
       btn.className="on"; curEntries=cat[1]; renderGrid(); };
     tabs.innerHTML="";
-    const curCat=KCATS.find(([,es])=>es.some(([,c])=>c===cur)) || KCATS[0];
-    KCATS.forEach(cat=>{ const t=document.createElement("button"); t.textContent=cat[0];
+    // Append a dynamic Macro tab listing each slot's summary (mirrors the C++ Macro tab).
+    const cats=KCATS.slice();
+    if(g_macroCount>0){ const me=[];
+      for(let i=0;i<g_macroCount;i++) me.push([i+": "+summarizeMacro(g_macros[i]),QK_MACRO+i]);
+      cats.push(["Macro",me]); }
+    const curCat=cats.find(([,es])=>es.some(([,c])=>c===cur)) || cats[0];
+    cats.forEach(cat=>{ const t=document.createElement("button"); t.textContent=cat[0];
       t.onclick=()=>selectTab(cat,t); tabs.appendChild(t);
       if(cat===curCat){ t.className="on"; curEntries=cat[1]; } });
     filt.value=""; renderGrid();
@@ -418,6 +436,119 @@ let setTdTiming=(i,tt,f)=>xfer([CMD,0x14,i,tt&0xff,(tt>>8)&0xff,f]);
 let viaGet    =(l,r,c)=>xfer([0x04,l,r,c]).then(d=>(d[4]<<8)|d[5]);
 let viaSet    =(l,r,c,kc)=>xfer([0x05,l,r,c,(kc>>8)&0xff,kc&0xff]);
 let viaKmReset=()=>xfer([0x06]);
+// VIA dynamic macros (standard VIA commands, no 0xAC channel prefix)
+let macroGetCount=()=>xfer([0x0C]).then(d=>d[1]);
+let macroGetBufSz=()=>xfer([0x0D]).then(d=>(d[1]<<8)|d[2]);
+let macroGetBuf  =async sz=>{ const buf=new Uint8Array(sz);
+  for(let off=0;off<sz;){ const n=Math.min(28,sz-off);
+    const d=await xfer([0x0E,(off>>8)&0xff,off&0xff,n]);
+    for(let i=0;i<n;i++) buf[off+i]=d[4+i]; off+=n; }
+  return buf; };
+let macroSetBuf  =async data=>{ const total=data.length;
+  for(let off=0;off<total;){ const n=Math.min(28,total-off);
+    const pkt=new Array(4+n).fill(0); pkt[0]=0x0F; pkt[1]=(off>>8)&0xff; pkt[2]=off&0xff; pkt[3]=n;
+    for(let i=0;i<n;i++) pkt[4+i]=data[off+i]; await xfer(pkt); off+=n; } };
+let macroReset   =()=>xfer([0x10]);
+
+// VIA RGB lighting (channel-based: [cmd, 0x03, value_id, data...]; reply byte 3 = first data byte).
+// Mirrors getLighting/setLight* in src/protocol.cpp.
+const VIA_RGB_CHAN=0x03, RGB_VAL_ID=0x01, RGB_MODE_ID=0x02, RGB_SPD_ID=0x03, RGB_COL_ID=0x04;
+let lightGet1   =vid=>xfer([0x08,VIA_RGB_CHAN,vid]).then(d=>d[3]);
+let getLighting =async()=>{ const c=await xfer([0x08,VIA_RGB_CHAN,RGB_COL_ID]);
+  return {mode:await lightGet1(RGB_MODE_ID), hue:c[3], sat:c[4],
+          val:await lightGet1(RGB_VAL_ID), speed:await lightGet1(RGB_SPD_ID)}; };
+let setLightMode =m=>xfer([0x07,VIA_RGB_CHAN,RGB_MODE_ID,m&0xff]);
+let setLightVal  =v=>xfer([0x07,VIA_RGB_CHAN,RGB_VAL_ID,v&0xff]);
+let setLightSpeed=s=>xfer([0x07,VIA_RGB_CHAN,RGB_SPD_ID,s&0xff]);
+let setLightColor=(h,s)=>xfer([0x07,VIA_RGB_CHAN,RGB_COL_ID,h&0xff,s&0xff]);
+let saveLighting =()=>xfer([0x09,VIA_RGB_CHAN]);
+// RGB matrix effect names (index = mode); mirrors RGB_MODE_NAMES in src/gui.cpp.
+const RGB_MODE_NAMES=["0. None","1. Solid Color","2. Breathing","3. Band Spiral Val","4. Cycle All",
+  "5. Cycle Left/Right","6. Cycle Up/Down","7. Rainbow Moving Chevron","8. Cycle Out In","9. Cycle Out In Dual",
+  "10. Cycle Pinwheel","11. Cycle Spiral","12. Dual Beacon","13. Rainbow Beacon","14. Jellybean Raindrops",
+  "15. Pixel Rain","16. Typing Heatmap","17. Digital Rain","18. Solid Reactive Simple","19. Solid Reactive Multiwide",
+  "20. Solid Reactive Multinexus","21. Splash","22. Solid Splash"];
+
+// Serialize macro step lists back into the flat buffer. Mirrors serializeMacros in src/protocol.cpp.
+function serializeMacros(macros,count,bufSize){
+  const buf=new Uint8Array(bufSize); let pos=0;
+  outer:
+  for(let m=0;m<count;m++){
+    const steps=(m<macros.length?macros[m]:[])||[];
+    for(const s of steps){
+      if(s.op==="text"){ for(const ch of s.text||""){ if(pos>=bufSize-1) break outer; buf[pos++]=ch.charCodeAt(0)&0xff; } }
+      else if(s.op==="delay"){ const ds=String(s.delay||0); if(pos+2+ds.length>=bufSize) break outer;
+        buf[pos++]=0x01; buf[pos++]=0x04; for(const c of ds) buf[pos++]=c.charCodeAt(0); buf[pos++]=0x7C; }
+      else { const code={tap:1,down:2,up:3}[s.op]; if(pos+2>=bufSize) break outer;
+        buf[pos++]=0x01; buf[pos++]=code; buf[pos++]=(s.kc||0)&0xff; }
+    }
+    if(pos>=bufSize) break outer;
+    buf[pos++]=0x00;
+  }
+  return buf;
+}
+
+// Parse the flat macro buffer into per-macro step lists. Mirrors parseMacros in
+// src/protocol.cpp: raw ASCII -> text; 0x01 prefix -> action (tap/down/up/delay); 0x00 -> end.
+let g_macros=[], g_macroCount=0, g_macroBufSz=0, g_selMacro=0;
+let g_light={mode:1,hue:0,sat:255,val:255,speed:128}, g_lightModeMax=22, g_lightOk=true;
+function parseMacros(buf,count){
+  const macros=[]; let pos=0; const n=buf.length;
+  for(let m=0;m<count;m++){
+    const steps=[]; let txt="";
+    const flush=()=>{ if(txt){ steps.push({op:"text",text:txt}); txt=""; } };
+    while(pos<n){
+      const b=buf[pos++];
+      if(b===0x00){ flush(); break; }
+      if(b===0x01){ flush(); if(pos>=n) break; const code=buf[pos++];
+        if(code===0x01||code===0x02||code===0x03){ if(pos>=n) break;
+          steps.push({op:["","tap","down","up"][code],kc:buf[pos++]}); }
+        else if(code===0x04){ let ds=""; while(pos<n&&buf[pos]!==0x7C) ds+=String.fromCharCode(buf[pos++]);
+          if(pos<n) pos++; steps.push({op:"delay",delay:ds?parseInt(ds,10):0}); }
+      } else txt+=String.fromCharCode(b);
+    }
+    flush(); macros.push(steps);
+  }
+  return macros;
+}
+// One-line summary of a macro for the picker (first few steps, elided). Mirrors gui.cpp.
+function summarizeMacro(steps){
+  if(!steps||!steps.length) return "(empty)";
+  const parts=[];
+  for(let i=0;i<steps.length&&i<3;i++){ const s=steps[i];
+    if(s.op==="text") parts.push('Text:"'+s.text+'"');
+    else if(s.op==="delay") parts.push("Delay "+s.delay);
+    else parts.push(s.op.charAt(0).toUpperCase()+s.op.slice(1)+" "+nameOf(s.kc)); }
+  let out=parts.join(" · ");
+  if(steps.length>3) out+=" …";
+  if(out.length>60) out=out.slice(0,57)+"...";
+  return out;
+}
+async function loadMacros(){
+  if(g_demo){ g_macros=(DEMO_DATA.macros||[]).map(s=>s.slice()); g_macroCount=g_macros.length; g_macroBufSz=2048; return; }
+  try{ g_macroCount=await macroGetCount();
+    if(g_macroCount>0){ g_macroBufSz=await macroGetBufSz(); g_macros=parseMacros(await macroGetBuf(g_macroBufSz),g_macroCount); }
+    else { g_macros=[]; g_macroBufSz=0; }
+  }catch(e){ g_macroCount=0; g_macros=[]; g_macroBufSz=0; }
+}
+async function applyMacros(){
+  if(g_demo) return;
+  try{ await macroSetBuf(serializeMacros(g_macros,g_macroCount,g_macroBufSz)); }catch(e){}
+}
+
+// Lighting load. Mirrors the connect-time probe in src/gui.cpp: read current state, then
+// send mode 255 (firmware clamps to the max valid effect), read it back, and restore.
+async function loadLighting(){
+  g_lightOk=true;
+  if(g_demo){ const l=DEMO_DATA.lighting||{};
+    g_light={mode:l.mode??1,hue:l.hue??0,sat:l.sat??255,val:l.val??255,speed:l.speed??128};
+    g_lightModeMax=RGB_MODE_NAMES.length-1; return; }
+  try{ g_light=await getLighting();
+    const saved=g_light.mode;
+    await setLightMode(255); g_lightModeMax=(await getLighting()).mode;
+    await setLightMode(saved); g_light.mode=saved;
+  }catch(e){ g_lightOk=false; g_lightModeMax=RGB_MODE_NAMES.length-1; }
+}
 
 const FF={CAPS_WORD:0,PERMISSIVE:1,HOKP:2,RETRO:3,AUTOSHIFT:4,CW_DOUBLE_SHIFT:5,CW_BOTH_SHIFTS:6};
 const PARAM={QUICKTAP:0,ASTIMEOUT:1,CWTIMEOUT:2,DEBOUNCE:3,DEBOUNCE_METHOD:4,ONESHOT:5};
@@ -446,6 +577,13 @@ const DEMO_DATA={
   combos:Array(16).fill({keys:["NO","NO","NO","NO"],output:"NO",enabled:false}),
   key_overrides:Array(16).fill({trigger:"NO",replacement:"NO",trigger_mods:[],
     suppressed_mods:[],negative_mods:[],layers:[],options:7,enabled:false}),
+  macros:[
+    [{op:"text",text:"hello"}],
+    [{op:"down",kc:0xE0},{op:"tap",kc:0x06},{op:"up",kc:0xE0}],
+    [{op:"text",text:"git "},{op:"delay",delay:100},{op:"tap",kc:0x28}],
+    [],[],[],[],[],[],[]
+  ],
+  lighting:{mode:1,hue:0,sat:255,val:200,speed:128},
   indicators:[{enabled:true,color:"#FF0000"},{enabled:true,color:"#00A000"},{enabled:true,color:"#808000"},
     {enabled:false,color:"#0000FF"},{enabled:false,color:"#800080"},{enabled:false,color:"#008080"},
     {enabled:false,color:"#0040FF"},{enabled:false,color:"#C0C0C0"},{enabled:false,color:"#FF6000"}],
@@ -534,6 +672,7 @@ async function refreshAll(){
   buildLayers(); await refreshKeyboard(); await buildDebounce();
   await buildTapDance(); await buildTiming(); await buildFeatures(); await buildCombos();
   await buildKeyOverrides(); await buildIndicators();
+  await loadLighting(); buildLighting(); await loadMacros(); buildMacros();
 }
 
 // Tab switching: show the matching panel, highlight the active button.
@@ -700,8 +839,8 @@ async function buildFeatures(){
 // Order must match the firmware indicator enum (IND_*). "Windows mode" is
 // persistent — when enabled it tints the whole board the entire time you're in
 // Windows mode, replacing the normal RGB effect.
-const IND_NAMES=["Caps Lock","Caps Word","Win FN layer","Num Lock","Scroll Lock",
-                 "Mac FN layer","Windows mode","Mac mode","One-shot mod"];
+const IND_NAMES=["Caps Lock","Caps Word","Num Lock","Scroll Lock","One-shot mod",
+                 "Mac FN layer","Win FN layer","Mac mode","Windows mode"];
 const SCOPE_NAMES=["board","keys","rows","cols"];
 const SCOPE_IDX={board:0,keys:1,rows:2,cols:3};
 
@@ -832,6 +971,123 @@ async function buildKeyOverrides(){
   }
 }
 
+// Macro editor — mirrors drawMacros() in src/gui.cpp. Edits stage into g_macros;
+// device writes happen on Clear slot / Reset all / Apply to keyboard only.
+const MACRO_OPS=["text","tap","down","up","delay"];
+const MACRO_OP_LABELS=["Text","Tap","Down","Up","Delay"];
+function buildMacros(){
+  const root=$("#macros"); root.innerHTML="";
+  if(g_macroCount===0){
+    root.innerHTML='<div class="hint">Macro support not detected (DYNAMIC_KEYMAP_MACRO_ENABLE not compiled in).</div>';
+    return;
+  }
+  if(g_macros.length<g_macroCount) while(g_macros.length<g_macroCount) g_macros.push([]);
+  g_selMacro=Math.max(0,Math.min(g_selMacro,g_macroCount-1));
+  const mac=g_macros[g_selMacro];
+
+  // slot selector + global actions
+  const bar=document.createElement("div"); bar.className="row"; bar.style.marginBottom="8px";
+  let slotOpts=""; for(let i=0;i<g_macroCount;i++) slotOpts+=`<option value="${i}" ${i===g_selMacro?"selected":""}>${i}</option>`;
+  bar.innerHTML=`<span>Slot:</span><select class="slot" style="width:70px">${slotOpts}</select>
+    <button class="clear">Clear slot</button><button class="resetall">Reset all</button>`;
+  root.appendChild(bar);
+  bar.querySelector(".slot").onchange=e=>{ g_selMacro=+e.target.value; buildMacros(); };
+  bar.querySelector(".clear").onclick=async()=>{ g_macros[g_selMacro]=[]; await applyMacros(); buildMacros(); };
+  bar.querySelector(".resetall").onclick=async()=>{ g_macros=Array.from({length:g_macroCount},()=>[]);
+    if(!g_demo){ try{ await macroReset(); }catch(e){} } buildMacros(); };
+
+  // steps table
+  const table=document.createElement("table");
+  table.innerHTML=`<thead><tr><th>#</th><th>type</th><th>value</th><th></th></tr></thead><tbody></tbody>`;
+  root.appendChild(table);
+  const tb=table.querySelector("tbody");
+  mac.forEach((s,i)=>{
+    const tr=document.createElement("tr");
+    let opOpts=""; MACRO_OPS.forEach((o,oi)=>opOpts+=`<option value="${o}" ${o===s.op?"selected":""}>${MACRO_OP_LABELS[oi]}</option>`);
+    tr.innerHTML=`<td>${i}</td><td><select class="op" style="width:80px">${opOpts}</select></td>
+      <td class="val"></td><td><button class="del">✕</button></td>`;
+    tb.appendChild(tr);
+    const val=tr.querySelector(".val");
+    if(s.op==="text"){ const inp=document.createElement("input"); inp.type="text"; inp.value=s.text||"";
+      inp.style.width="100%"; inp.oninput=()=>{ s.text=inp.value; }; val.appendChild(inp); }
+    else if(s.op==="delay"){ const inp=document.createElement("input"); inp.type="number"; inp.min=0; inp.max=65535;
+      inp.value=s.delay||0; inp.style.width="90px"; inp.oninput=()=>{ s.delay=Math.max(0,Math.min(65535,+inp.value||0)); };
+      val.appendChild(inp); val.appendChild(document.createTextNode(" ms")); }
+    else { const b=document.createElement("button"); b.className="kcfield";
+      const refresh=()=>{ b.textContent=nameOf(s.kc&0xFF); }; refresh();
+      b.onclick=async()=>{ const v=await pickKeycode(s.kc&0xFF,`Macro ${g_selMacro} step ${i}`);
+        if(v!=null){ if(v>0xFF){ b.title="only basic keycodes are supported in macros"; } s.kc=v&0xFF; refresh(); } };
+      val.appendChild(b); }
+    tr.querySelector(".op").onchange=e=>{ s.op=e.target.value; s.kc=0; s.delay=0; s.text=""; buildMacros(); };
+    tr.querySelector(".del").onclick=()=>{ mac.splice(i,1); buildMacros(); };
+  });
+
+  // add-step buttons + apply
+  const add=document.createElement("div"); add.className="row"; add.style.margin="8px 0";
+  MACRO_OPS.forEach((o,oi)=>{ const b=document.createElement("button"); b.textContent="+ "+MACRO_OP_LABELS[oi];
+    b.onclick=()=>{ mac.push({op:o,kc:0,delay:0,text:""}); buildMacros(); }; add.appendChild(b); });
+  root.appendChild(add);
+
+  const foot=document.createElement("div"); foot.className="row";
+  const apply=document.createElement("button"); apply.textContent="Apply to keyboard"; apply.className="primary";
+  apply.onclick=()=>applyMacros();
+  const info=document.createElement("span"); info.className="hint"; info.textContent=`Buffer: ${g_macroBufSz} bytes available`;
+  foot.appendChild(apply); foot.appendChild(info); root.appendChild(foot);
+}
+
+// HSV<->RGB on QMK's 0-255 scale (firmware stores HSV; the browser color input is RGB).
+function lightHsv2rgb(h,s,v){ h/=255;s/=255;v/=255; const i=Math.floor(h*6),f=h*6-i,
+  p=v*(1-s),q=v*(1-f*s),t=v*(1-(1-f)*s); let r,g,b;
+  switch(i%6){case 0:r=v,g=t,b=p;break;case 1:r=q,g=v,b=p;break;case 2:r=p,g=v,b=t;break;
+    case 3:r=p,g=q,b=v;break;case 4:r=t,g=p,b=v;break;default:r=v,g=p,b=q;}
+  return [Math.round(r*255),Math.round(g*255),Math.round(b*255)]; }
+function lightRgb2hsv(r,g,b){ r/=255;g/=255;b/=255; const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;
+  let h=0; if(d){ if(mx===r)h=((g-b)/d)%6; else if(mx===g)h=(b-r)/d+2; else h=(r-g)/d+4; h/=6; if(h<0)h+=1; }
+  return [Math.round(h*255),Math.round((mx?d/mx:0)*255),Math.round(mx*255)]; }
+
+// Lighting editor — mirrors drawLighting() in src/gui.cpp. Changes apply to the device
+// immediately; Save writes the current settings to EEPROM.
+function buildLighting(){
+  const root=$("#lighting"); root.innerHTML="";
+  if(!g_lightOk){ root.innerHTML='<div class="hint">RGB lighting controls not available on this device.</div>'; return; }
+  root.innerHTML='<div class="hint" style="margin-bottom:8px">Changes take effect immediately; Save writes to EEPROM.</div>';
+
+  // mode
+  const modeRow=document.createElement("div"); modeRow.className="row"; modeRow.style.marginBottom="8px";
+  const limit=Math.min(g_lightModeMax+1,RGB_MODE_NAMES.length);
+  let opts=""; for(let i=0;i<limit;i++) opts+=`<option value="${i}" ${i===g_light.mode?"selected":""}>${RGB_MODE_NAMES[i]}</option>`;
+  modeRow.innerHTML=`<label>Mode</label><select class="mode" style="width:260px">${opts}</select>`;
+  root.appendChild(modeRow);
+  modeRow.querySelector(".mode").onchange=e=>{ g_light.mode=+e.target.value; if(!g_demo) setLightMode(g_light.mode); };
+
+  // color (hue+sat+brightness via the HSV color picker, same as the native ColorEdit3)
+  const colRow=document.createElement("div"); colRow.className="row"; colRow.style.marginBottom="8px";
+  const [r,g,b]=lightHsv2rgb(g_light.hue,g_light.sat,g_light.val);
+  const hex="#"+[r,g,b].map(x=>x.toString(16).padStart(2,"0")).join("");
+  colRow.innerHTML=`<label>Color</label><input type="color" class="col" value="${hex}">`;
+  root.appendChild(colRow);
+  colRow.querySelector(".col").oninput=e=>{ const h=e.target.value;
+    const [nh,ns,nv]=lightRgb2hsv(parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16));
+    if(nh!==g_light.hue||ns!==g_light.sat){ g_light.hue=nh; g_light.sat=ns; if(!g_demo) setLightColor(nh,ns); }
+    if(nv!==g_light.val){ g_light.val=nv; if(!g_demo) setLightVal(nv); } };
+
+  // speed
+  const spdRow=document.createElement("div"); spdRow.className="row"; spdRow.style.marginBottom="8px";
+  spdRow.innerHTML=`<label>Speed</label><input type="range" class="spd" min="0" max="255" value="${g_light.speed}" style="width:200px">
+    <input type="number" class="spdn" min="0" max="255" value="${g_light.speed}" style="width:60px">`;
+  root.appendChild(spdRow);
+  const spd=spdRow.querySelector(".spd"), spdn=spdRow.querySelector(".spdn");
+  const setSpd=v=>{ v=Math.max(0,Math.min(255,v|0)); g_light.speed=v; spd.value=v; spdn.value=v; if(!g_demo) setLightSpeed(v); };
+  spd.oninput=()=>setSpd(+spd.value); spdn.oninput=()=>setSpd(+spdn.value);
+
+  // save
+  const foot=document.createElement("div"); foot.className="row";
+  const save=document.createElement("button"); save.textContent="Save to keyboard"; save.className="primary";
+  save.onclick=()=>{ if(!g_demo) saveLighting(); };
+  const info=document.createElement("span"); info.className="hint"; info.textContent="(writes current lighting settings to EEPROM)";
+  foot.appendChild(save); foot.appendChild(info); root.appendChild(foot);
+}
+
 //// ---- presets (shared JSON schema with q1config.py) ----
 const FLAG_KEYS=["caps_word","permissive_hold","hold_on_other_key","retro_tapping","auto_shift",
   "caps_word_double_shift","caps_word_both_shifts"];
@@ -849,6 +1105,8 @@ function kcParse(t){
     return QK_MODS|(mods5FromStr(m)<<8)|(kcParse(b)&0xFF); }
   if(t.startsWith("TD(")&&t.endsWith(")")) return 0x5700|parseInt(t.slice(3,-1));
   if(/^TD\d+$/.test(t)) return 0x5700|parseInt(t.slice(2));
+  if(t.startsWith("MACRO(")&&t.endsWith(")")) return QK_MACRO|(parseInt(t.slice(6,-1))&0xFF);
+  if(/^MACRO\d+$/.test(t)) return QK_MACRO|(parseInt(t.slice(5))&0xFF);
   if(t.startsWith("0X")) return parseInt(t,16);
   if(t in KC) return KC[t];
   if(/^\d+$/.test(t)) return parseInt(t,10);

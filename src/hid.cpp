@@ -46,6 +46,19 @@ std::array<uint8_t, 32> HidDevice::xfer(std::initializer_list<uint8_t> payload) 
     return reply;
 }
 
+std::array<uint8_t, 32> HidDevice::xfer(const uint8_t* data, size_t len) {
+    if (!dev_) throw std::runtime_error("device not open");
+    uint8_t buf[33] = {};
+    for (size_t i = 0; i < len && i < 32; i++) buf[1 + i] = data[i];
+    if (hid_write(dev(dev_), buf, 33) < 0)
+        throw std::runtime_error("hid_write failed");
+    std::array<uint8_t, 32> reply = {};
+    int n = hid_read_timeout(dev(dev_), reply.data(), 32, TIMEOUT_MS);
+    if (n < 0) throw std::runtime_error("hid_read failed");
+    if (n == 0) throw std::runtime_error("timeout");
+    return reply;
+}
+
 bool HidDevice::tryRead(std::array<uint8_t, 32>& out) {
     if (!dev_) return false;
     int n = hid_read_timeout(static_cast<hid_device*>(dev_), out.data(), 32, 0);

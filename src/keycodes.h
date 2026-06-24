@@ -13,6 +13,7 @@ static constexpr uint16_t QK_MODS      = 0x0100;  // ..0x1FFF  C()/S()/A()/G()
 static constexpr uint16_t QK_MOD_TAP   = 0x2000;  // ..0x3FFF  MT()
 static constexpr uint16_t QK_LAYER_TAP = 0x4000;  // ..0x4FFF  LT()
 static constexpr uint16_t QK_OSM       = 0x52A0;  // ..0x52BF  OSM()
+static constexpr uint16_t QK_MACRO     = 0x7700;  // ..0x77FF  MACRO0..N (dynamic macros)
 
 // 5-bit packed mod field used by MT()/OSM()/modded keycodes: bits 0-3 = Ctrl,
 // Shift, Alt, Gui; bit 4 = right-hand. Round-trips with the "+"-joined token form

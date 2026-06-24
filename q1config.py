@@ -102,10 +102,11 @@ PARAM_QUICKTAP, PARAM_ASTIMEOUT, PARAM_CWTIMEOUT, PARAM_DEBOUNCE, PARAM_DEBOUNCE
 # debounce method index -> canonical name (must match keymap.c dispatcher order)
 DEBOUNCE_METHODS = ["none", "sym_defer_g", "sym_eager_pk", "asym_eager_defer_pk"]
 # indicator indices (must match keymap.c IND_* )
-IND_NAMES = ["capslock", "capsword", "winfn"]
+IND_NAMES = ["capslock","capsword","numlock","scrolllock","oneshotmod","macfn","winfn","macmode","windowsmode"]
 # Standard VIA dynamic-keymap commands (handled by via.c, big-endian keycode)
 VIA_GET_KEYCODE, VIA_SET_KEYCODE, VIA_KEYMAP_RESET = 0x04, 0x05, 0x06
 QK_TAP_DANCE = 0x5700
+QK_MACRO = 0x7700  # ..0x77FF  MACRO0..N (dynamic macros)
 ROWS, COLS, LAYERS = 6, 16, 4
 
 # Slots are named TD0..TD63 so a slot's name is its index (matches the firmware).
@@ -200,6 +201,10 @@ def kc(token):
         return QK_TAP_DANCE | int(t[3:-1])
     if t.startswith("TD") and t[2:].isdigit():
         return QK_TAP_DANCE | int(t[2:])
+    if t.startswith("MACRO(") and t.endswith(")"):
+        return QK_MACRO | (int(t[6:-1]) & 0xFF)
+    if t.startswith("MACRO") and t[5:].isdigit():
+        return QK_MACRO | (int(t[5:]) & 0xFF)
     if t.startswith("0X"):
         return int(t, 16)
     if t in NAMES:
@@ -212,6 +217,8 @@ def kc(token):
 def name_of(code):
     if QK_TAP_DANCE <= code <= QK_TAP_DANCE | 0xFF:
         return f"TD{code & 0xFF}"
+    if QK_MACRO <= code <= QK_MACRO | 0xFF:
+        return f"MACRO{code & 0xFF}"
     if 0x5280 <= code <= 0x529F:
         return f"OSL({code & 0x1F})"
     if 0x52A0 <= code <= 0x52BF:
@@ -353,7 +360,7 @@ def parse_color(tokens):
 def show_indicator(h, i):
     r = send(h, [CMD, GET_INDICATOR, i])
     en = "on " if r[3] else "off"
-    print(f"  [{i}] {IND_NAMES[i]:<9} {en}  color=({r[4]},{r[5]},{r[6]})  #{r[4]:02X}{r[5]:02X}{r[6]:02X}")
+    print(f"  [{i}] {IND_NAMES[i]:<12} {en}  color=({r[4]},{r[5]},{r[6]})  #{r[4]:02X}{r[5]:02X}{r[6]:02X}")
 
 
 def set_indicator(h, i, enabled, rgb):

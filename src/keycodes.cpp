@@ -143,6 +143,8 @@ std::string nameOf(uint16_t code) {
     buildTables();
     if (code >= 0x5700 && code <= 0x57FF)
         return "TD" + std::to_string(code & 0xFF);
+    if (code >= QK_MACRO && code <= QK_MACRO + 0xFF)
+        return "MACRO" + std::to_string(code - QK_MACRO);
     // Layer-switch + one-shot-mod keycodes: <prefix>(arg), 0x20 stride
     switch (code & 0xFFE0) {
         case 0x5200: return "TO("  + std::to_string(code & 0x1F) + ")";

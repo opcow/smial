@@ -22,6 +22,7 @@
 #include <nfd.hpp>
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <string>
 #include "../fonts/inter_regular.inl"
@@ -45,9 +46,10 @@ static void popPrimaryButtonStyle() { ImGui::PopStyleColor(3); }
 
 static const char* LAYER_NAMES[] = {"0 MAC_BASE","1 MAC_FN","2 WIN_BASE","3 WIN_FN"};
 // Slots are named TD0..TDn so a slot's name is its index (matches the firmware).
-static const char* IND_NAMES[]   = {"Caps Lock","Caps Word","Win FN layer","Num Lock",
-                                    "Scroll Lock","Mac FN layer","Windows mode","Mac mode",
-                                    "One-shot mod"};
+// Order matches the firmware IND_* enum (keymap.c / rtcfg_common.c).
+static const char* IND_NAMES[]   = {"Caps Lock","Caps Word","Num Lock","Scroll Lock",
+                                    "One-shot mod","Mac FN layer","Win FN layer","Mac mode",
+                                    "Windows mode"};
 static const char* FLAG_NAMES[]  = {"Caps Word","Permissive hold","Hold on other key press","Retro tapping","Auto Shift"};
 static const char* DB_METHOD_LABELS[] = {"None","Symmetric Defer","Symmetric Eager","Asymmetric Eager/Defer"};
 
@@ -67,6 +69,13 @@ static FeatState    g_feat   = {};
 static IndState     g_ind[INDICATOR_COUNT] = {};
 static Combo        g_combo[COMBO_SLOT_COUNT] = {};
 static KeyOverride  g_ko[KO_SLOT_COUNT]       = {};
+
+static ViaLightState      g_light      = {};
+static int                g_lightModeMax = 22;  // probed at connect; default = Q1 Pro max
+static int                g_macroCount = 0;
+static int                g_macroBufSz = 0;
+static std::vector<Macro> g_macros;
+static int                g_selMacro   = 0;
 
 // identify (non-blocking poll in render loop)
 static bool  g_identifying   = false;
@@ -95,11 +104,50 @@ static void loadAll() {
     for (int i = 0; i < INDICATOR_COUNT; i++) try { g_ind[i] = getInd(g_dev, i); } catch (...) {}
     for (int i = 0; i < COMBO_SLOT_COUNT; i++) try { g_combo[i] = getCombo(g_dev, i); } catch (...) {}
     for (int i = 0; i < KO_SLOT_COUNT;    i++) try { g_ko[i]    = getKo(g_dev, i);    } catch (...) {}
+    try {
+        g_light = getLighting(g_dev);
+        // Probe max valid mode: send 255, firmware clamps to RGB_MATRIX_EFFECT_MAX-1, read back.
+        uint8_t saved = g_light.mode;
+        setLightMode(g_dev, 255);
+        g_lightModeMax = (int)getLighting(g_dev).mode;
+        setLightMode(g_dev, saved);
+        g_light.mode = saved;
+    } catch (...) {}
+    try {
+        g_macroCount = viaMacroGetCount(g_dev);
+        if (g_macroCount > 0) {
+            g_macroBufSz = viaMacroGetBufSize(g_dev);
+            auto raw = viaMacroGetBuf(g_dev, g_macroBufSz);
+            g_macros = parseMacros(raw, g_macroCount);
+        }
+    } catch (...) {}
     loadKeymap();
 }
 
 static bool KcPicker(const char* id, uint16_t& kc);  // fwd
 static bool KcBuilder(uint16_t& kc);                  // fwd
+
+// One-line summary of a macro's steps for the picker's Macro tab. Joins the first
+// few steps (Text:"…" / Tap KC / Delay ms) and elides the rest.
+static std::string summarizeMacro(const Macro& m) {
+    if (m.empty()) return "(empty)";
+    std::string out;
+    const int kShow = 3;
+    for (int i = 0; i < (int)m.size() && i < kShow; i++) {
+        const MacroStep& s = m[i];
+        if (i) out += " \xC2\xB7 ";  // " · "
+        switch (s.op) {
+            case MacroOp::Text:  out += "Text:\"" + s.text + "\""; break;
+            case MacroOp::Tap:   out += "Tap "   + nameOf(s.kc);   break;
+            case MacroOp::Down:  out += "Down "  + nameOf(s.kc);   break;
+            case MacroOp::Up:    out += "Up "    + nameOf(s.kc);   break;
+            case MacroOp::Delay: out += "Delay " + std::to_string(s.delay); break;
+        }
+    }
+    if ((int)m.size() > kShow) out += " \xE2\x80\xA6";  // " …"
+    if (out.size() > 60) out = out.substr(0, 57) + "...";
+    return out;
+}
 
 // Tabbed category grid — call inside an open popup. Sets kc and returns true
 // (and closes the popup) when a keycode button is clicked. A filter box at the
@@ -151,6 +199,21 @@ static bool KcPickerBody(uint16_t& kc) {
         if (ImGui::BeginTabItem("Build")) {
             ImGui::BeginChild("##build", ImVec2(0, 270));
             changed |= KcBuilder(kc);
+            ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+        if (g_macroCount > 0 && ImGui::BeginTabItem("Macro")) {
+            ImGui::BeginChild("##macrosel", ImVec2(0, 270));
+            for (int i = 0; i < g_macroCount; i++) {
+                std::string label = std::to_string(i) + ": " +
+                    (i < (int)g_macros.size() ? summarizeMacro(g_macros[i]) : "(empty)");
+                bool sel = kc == (uint16_t)(QK_MACRO + i);
+                if (ImGui::Selectable(label.c_str(), sel)) {
+                    kc = (uint16_t)(QK_MACRO + i);
+                    changed = true;
+                    ImGui::CloseCurrentPopup();
+                }
+            }
             ImGui::EndChild();
             ImGui::EndTabItem();
         }
@@ -822,6 +885,246 @@ static void drawIndicators() {
     drawScopePopup();
 }
 
+// ── lighting panel ────────────────────────────────────────────────────────────
+// Q1 Pro compiled effect list (sequential enum, from keyboards/keychron/q1_pro/info.json).
+// Matches the renumbered enum that results from only enabling the listed animations.
+static const char* const RGB_MODE_NAMES[] = {
+    "0. None",
+    "1. Solid Color",
+    "2. Breathing",
+    "3. Band Spiral Val",
+    "4. Cycle All",
+    "5. Cycle Left/Right",
+    "6. Cycle Up/Down",
+    "7. Rainbow Moving Chevron",
+    "8. Cycle Out In",
+    "9. Cycle Out In Dual",
+    "10. Cycle Pinwheel",
+    "11. Cycle Spiral",
+    "12. Dual Beacon",
+    "13. Rainbow Beacon",
+    "14. Jellybean Raindrops",
+    "15. Pixel Rain",
+    "16. Typing Heatmap",
+    "17. Digital Rain",
+    "18. Solid Reactive Simple",
+    "19. Solid Reactive Multiwide",
+    "20. Solid Reactive Multinexus",
+    "21. Splash",
+    "22. Solid Splash",
+};
+static constexpr int RGB_MODE_NAMES_COUNT = (int)(sizeof(RGB_MODE_NAMES) / sizeof(RGB_MODE_NAMES[0]));
+
+static void drawLighting() {
+    ImGui::SeparatorText("RGB Lighting");
+    ImGui::TextDisabled("Changes take effect immediately; Save writes to EEPROM.");
+
+    // Mode combo — clamped to g_lightModeMax (probed from keyboard at connect time)
+    {
+        int limit = g_lightModeMax + 1;  // number of valid entries
+        auto modeName = [&](int i) -> const char* {
+            return (i < RGB_MODE_NAMES_COUNT) ? RGB_MODE_NAMES[i] : "Unknown";
+        };
+        const char* preview = modeName(g_light.mode);
+        ImGui::SetNextItemWidth(280);
+        if (ImGui::BeginCombo("Mode", preview)) {
+            for (int i = 0; i < limit; i++) {
+                bool sel = (g_light.mode == (uint8_t)i);
+                if (ImGui::Selectable(modeName(i), sel)) {
+                    g_light.mode = (uint8_t)i;
+                    try { setLightMode(g_dev, g_light.mode); } catch (...) {}
+                }
+                if (sel) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+    }
+
+    ImGui::Spacing();
+
+    // Color — compact one-line swatch + fields; click swatch to open hue wheel popup.
+    // QMK stores HSV 0-255; convert to/from RGB float for ImGui.
+    {
+        float r, g, b;
+        ImGui::ColorConvertHSVtoRGB(
+            g_light.hue / 255.0f, g_light.sat / 255.0f, g_light.val / 255.0f,
+            r, g, b);
+        float col[3] = {r, g, b};
+        ImGui::SetNextItemWidth(220);
+        if (ImGui::ColorEdit3("Color", col, ImGuiColorEditFlags_PickerHueWheel)) {
+            float nh, ns, nv;
+            ImGui::ColorConvertRGBtoHSV(col[0], col[1], col[2], nh, ns, nv);
+            auto u8 = [](float f) -> uint8_t {
+                return (uint8_t)std::clamp((int)(f * 255.0f + 0.5f), 0, 255);
+            };
+            uint8_t newH = u8(nh), newS = u8(ns), newV = u8(nv);
+            if (newH != g_light.hue || newS != g_light.sat) {
+                g_light.hue = newH; g_light.sat = newS;
+                try { setLightColor(g_dev, newH, newS); } catch (...) {}
+            }
+            if (newV != g_light.val) {
+                g_light.val = newV;
+                try { setLightVal(g_dev, newV); } catch (...) {}
+            }
+        }
+    }
+
+    // Speed
+    {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted("Speed");
+        ImGui::SameLine();
+        int spd = g_light.speed;
+        ImGui::SetNextItemWidth(200);
+        bool ch = ImGui::SliderInt("##spd", &spd, 0, 255);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(60);
+        ch |= ImGui::InputInt("##spdi", &spd, 0, 0);
+        if (ch) {
+            spd = std::clamp(spd, 0, 255);
+            g_light.speed = (uint8_t)spd;
+            try { setLightSpeed(g_dev, g_light.speed); } catch (...) {}
+        }
+    }
+
+    ImGui::Spacing();
+    pushPrimaryButtonStyle();
+    if (ImGui::Button("Save to keyboard"))
+        try { saveLighting(g_dev); } catch (...) {}
+    popPrimaryButtonStyle();
+    ImGui::SameLine();
+    ImGui::TextDisabled("(writes current lighting settings to EEPROM)");
+}
+
+// ── macros panel ──────────────────────────────────────────────────────────────
+static const char* macroOpLabel(MacroOp op) {
+    switch (op) {
+        case MacroOp::Text:  return "Text";
+        case MacroOp::Tap:   return "Tap";
+        case MacroOp::Down:  return "Down";
+        case MacroOp::Up:    return "Up";
+        case MacroOp::Delay: return "Delay";
+    }
+    return "?";
+}
+
+static void applyMacros() {
+    try {
+        auto raw = serializeMacros(g_macros, g_macroCount, g_macroBufSz);
+        viaMacroSetBuf(g_dev, raw);
+    } catch (...) {}
+}
+
+static void drawMacros() {
+    ImGui::SeparatorText("Macros");
+
+    if (g_macroCount == 0) {
+        ImGui::TextDisabled("Macro support not detected (DYNAMIC_KEYMAP_MACRO_ENABLE not compiled in).");
+        return;
+    }
+
+    // Slot selector + global actions
+    ImGui::SetNextItemWidth(160);
+    ImGui::SliderInt("Slot", &g_selMacro, 0, g_macroCount - 1);
+    g_selMacro = std::clamp(g_selMacro, 0, g_macroCount - 1);
+    ImGui::SameLine();
+    pushPrimaryButtonStyle();
+    if (ImGui::SmallButton("Clear slot")) {
+        if (g_selMacro < (int)g_macros.size()) g_macros[g_selMacro].clear();
+        applyMacros();
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Reset all")) {
+        g_macros.assign(g_macroCount, {});
+        try { viaMacroReset(g_dev); } catch (...) {}
+    }
+    popPrimaryButtonStyle();
+
+    // Ensure vector is the right size
+    if ((int)g_macros.size() < g_macroCount)
+        g_macros.resize(g_macroCount);
+
+    Macro& mac = g_macros[g_selMacro];
+
+    // Steps table
+    if (ImGui::BeginTable("macro_steps", 4,
+            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
+            ImVec2(0, 220))) {
+        ImGui::TableSetupColumn("#",       ImGuiTableColumnFlags_WidthFixed,  28);
+        ImGui::TableSetupColumn("Type",    ImGuiTableColumnFlags_WidthFixed,  92);
+        ImGui::TableSetupColumn("Value",   ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("",        ImGuiTableColumnFlags_WidthFixed,  30);
+        ImGui::TableHeadersRow();
+
+        int toDelete = -1;
+        for (int i = 0; i < (int)mac.size(); i++) {
+            ImGui::TableNextRow();
+            ImGui::PushID(i);
+            MacroStep& s = mac[i];
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%d", i);
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(-1);
+            const char* opLabels[] = {"Text","Tap","Down","Up","Delay"};
+            int opIdx = (int)s.op;
+            if (ImGui::Combo("##op", &opIdx, opLabels, 5)) {
+                s.op = (MacroOp)opIdx;
+                // reset value fields when type changes
+                s.kc = 0; s.delay = 0; s.text.clear();
+            }
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::SetNextItemWidth(-1);
+            if (s.op == MacroOp::Text) {
+                char buf[256] = {};
+                strncpy(buf, s.text.c_str(), sizeof(buf) - 1);
+                if (ImGui::InputText("##txt", buf, sizeof(buf)))
+                    s.text = buf;
+            } else if (s.op == MacroOp::Delay) {
+                int ms = s.delay;
+                if (ImGui::InputInt("ms##del", &ms, 10, 100)) {
+                    if (ms < 0) ms = 0; if (ms > 65535) ms = 65535;
+                    s.delay = (uint16_t)ms;
+                }
+            } else {
+                // Tap / Down / Up — show keycode name, pick via popup
+                uint16_t kc16 = (uint16_t)s.kc;
+                if (KcPicker("##mckc", kc16))
+                    s.kc = (uint8_t)(kc16 & 0xFF);
+                if (kc16 > 0xFF)
+                    ImGui::TextDisabled("(only basic keycodes supported in macros)");
+            }
+
+            ImGui::TableSetColumnIndex(3);
+            if (ImGui::SmallButton("X")) toDelete = i;
+
+            ImGui::PopID();
+        }
+        if (toDelete >= 0) mac.erase(mac.begin() + toDelete);
+        ImGui::EndTable();
+    }
+
+    // Add step buttons
+    const char* addLabels[] = {"+ Text","+ Tap","+ Down","+ Up","+ Delay"};
+    MacroOp     addOps[]    = {MacroOp::Text, MacroOp::Tap, MacroOp::Down, MacroOp::Up, MacroOp::Delay};
+    pushPrimaryButtonStyle();
+    for (int i = 0; i < 5; i++) {
+        if (i > 0) ImGui::SameLine();
+        if (ImGui::SmallButton(addLabels[i]))
+            mac.push_back({addOps[i], 0, 0, {}});
+    }
+    popPrimaryButtonStyle();
+
+    ImGui::Spacing();
+    pushPrimaryButtonStyle();
+    if (ImGui::Button("Apply to keyboard")) applyMacros();
+    popPrimaryButtonStyle();
+    ImGui::SameLine();
+    ImGui::TextDisabled("Buffer: %d bytes available", g_macroBufSz);
+}
+
 // ── presets panel ─────────────────────────────────────────────────────────────
 static void drawPresets() {
     ImGui::SeparatorText("Presets");
@@ -1232,6 +1535,22 @@ int gui_main() {
                     ImGui::BeginChild("##tab_ind");
                     ImGui::BeginDisabled(g_identifying);
                     drawIndicators();
+                    ImGui::EndDisabled();
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Lighting")) {
+                    ImGui::BeginChild("##tab_light");
+                    ImGui::BeginDisabled(g_identifying);
+                    drawLighting();
+                    ImGui::EndDisabled();
+                    ImGui::EndChild();
+                    ImGui::EndTabItem();
+                }
+                if (ImGui::BeginTabItem("Macros")) {
+                    ImGui::BeginChild("##tab_macro");
+                    ImGui::BeginDisabled(g_identifying);
+                    drawMacros();
                     ImGui::EndDisabled();
                     ImGui::EndChild();
                     ImGui::EndTabItem();
