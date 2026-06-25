@@ -15,7 +15,7 @@ save/load configurations as files.
 > stock Keychron firmware won't respond. The flash is a one-time step; after it, day-to-day
 > changes are made live over USB with no further reflashing.
 >
-> **VIA still works.** The `rtcfg` build keeps full VIA compatibility — VIA/Vial can still
+> **VIA still works.** The `rtcfg` build keeps full VIA compatibility — VIA can still
 > connect and remap keys as usual. (Settings made through these tools live in the keyboard's
 > own config and simply aren't shown in the VIA GUI; they don't interfere with it.)
 
