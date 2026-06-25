@@ -66,6 +66,31 @@ static void buildTables() {
     // Magic: toggle N-key rollover (Keychron Fn+N)
     KC["NK_TOGG"]=0x7013;
 
+    // International / JIS keys (plain HID usages; work on any board)
+    KC["NUHS"]=0x32; KC["NUBS"]=0x64;
+    KC["RO"]=0x87;   KC["KANA"]=0x88; KC["JYEN"]=0x89;
+    KC["HENK"]=0x8A; KC["MHEN"]=0x8B; KC["HAEN"]=0x90; KC["HANJ"]=0x91;
+
+    // Editing / application keys (plain HID usages; work on any board).
+    // POWER (0x66) is the keyboard HID power usage, distinct from consumer PWR (0xA5).
+    KC["APP"]=0x65;  KC["POWER"]=0x66; KC["EXEC"]=0x74; KC["HELP"]=0x75;
+    KC["MENU"]=0x76; KC["SLCT"]=0x77;  KC["STOP"]=0x78; KC["AGIN"]=0x79;
+    KC["UNDO"]=0x7A; KC["CUT"]=0x7B;   KC["COPY"]=0x7C; KC["PSTE"]=0x7D;
+    KC["FIND"]=0x7E; KC["ERAS"]=0x99;
+
+    // Mouse keys (QK_MOUSE range 0xCD-0xDF; need MOUSEKEY_ENABLE in firmware)
+    KC["MS_UP"]=0xCD;   KC["MS_DOWN"]=0xCE; KC["MS_LEFT"]=0xCF; KC["MS_RGHT"]=0xD0;
+    KC["MS_BTN1"]=0xD1; KC["MS_BTN2"]=0xD2; KC["MS_BTN3"]=0xD3; KC["MS_BTN4"]=0xD4;
+    KC["MS_BTN5"]=0xD5; KC["MS_BTN6"]=0xD6; KC["MS_BTN7"]=0xD7; KC["MS_BTN8"]=0xD8;
+    KC["MS_WHLU"]=0xD9; KC["MS_WHLD"]=0xDA; KC["MS_WHLL"]=0xDB; KC["MS_WHLR"]=0xDC;
+    KC["MS_ACL0"]=0xDD; KC["MS_ACL1"]=0xDE; KC["MS_ACL2"]=0xDF;
+
+    // Magic / Bootmagic GUI/Alt/Ctrl swaps (QK_MAGIC range; need Bootmagic in firmware).
+    // Names match the firmware's canonical short aliases (keycodes.h).
+    KC["GU_ON"]=0x7009;  KC["GU_OFF"]=0x700A; KC["GU_TOGG"]=0x700B;
+    KC["AG_SWAP"]=0x7014; KC["AG_NORM"]=0x7015; KC["AG_TOGG"]=0x7016;
+    KC["CG_SWAP"]=0x701B; KC["CG_NORM"]=0x701C; KC["CG_TOGG"]=0x701D;
+
     // Keychron vendor custom keycodes (QK_KB range, 0x7E00) — names match VIA
     const char* kc_custom[] = {
         "LOpt", "ROpt", "LCmd", "RCmd", "MCtrl", "LPad", "Task", "File",
@@ -228,6 +253,8 @@ const std::vector<std::pair<std::string, uint16_t>>& allKeycodes() {
 static const char* categoryOf(uint16_t c) {
     if (c == 0x00 || c == 0x01 || c == 0x7C73 || c == 0x7C59 ||
         (c >= 0x7C10 && c <= 0x7C15) || c == 0x7C00 || c == 0x7013) return "Special";
+    if (c >= 0xCD && c <= 0xDF) return "Mouse";                            // mouse keys
+    if (c == 0x32) return "Special";                                       // NUHS (groups w/ Intl)
     if (c >= 0x04 && c <= 0x1D) return "Alpha";                            // A-Z
     if (c >= 0xE0 && c <= 0xE7) return "Mods";                             // LCTL..RGUI
     if ((c >= 0x3A && c <= 0x45) || (c >= 0x68 && c <= 0x73)) return "Fn"; // F1-F24
@@ -266,7 +293,7 @@ const std::vector<KcCategory>& keycodeCategories() {
     static std::vector<KcCategory> CATS;
     if (!CATS.empty()) return CATS;
     buildTables();
-    const char* order[] = {"Alpha","Fn","Symbols","Nav","Mods","Media","Layers","Lighting","Special","Custom"};
+    const char* order[] = {"Alpha","Fn","Symbols","Nav","Mods","Media","Mouse","Layers","Lighting","Special","Custom"};
     for (const char* name : order) {
         KcCategory cat{name, {}};
         for (auto& e : ENTRIES)
@@ -371,6 +398,30 @@ static void buildDesc() {
     d("SShot","Screenshot");  d("Cortana","Cortana"); d("Siri","Siri");
     d("BT1","Bluetooth 1");   d("BT2","Bluetooth 2"); d("BT3","Bluetooth 3");
     d("Batt","Battery Level");
+    // International / JIS
+    d("NUHS","Non-US # and ~"); d("NUBS","Non-US \\ and |"); d("RO","JIS \\ and _ (Ro)");
+    d("KANA","JIS Katakana/Hiragana"); d("JYEN","JPN Yen"); d("HENK","JIS Henkan");
+    d("MHEN","JIS Muhenkan"); d("HAEN","HanYeong (Korean)"); d("HANJ","Hanja (Korean)");
+    // Editing / application
+    d("APP","Application/Menu key"); d("POWER","Power (keyboard)"); d("EXEC","Execute");
+    d("HELP","Help"); d("MENU","Menu"); d("SLCT","Select"); d("STOP","Stop");
+    d("AGIN","Again"); d("UNDO","Undo"); d("CUT","Cut"); d("COPY","Copy");
+    d("PSTE","Paste"); d("FIND","Find"); d("ERAS","Alternate Erase");
+    // Mouse
+    d("MS_UP","Mouse Cursor Up"); d("MS_DOWN","Mouse Cursor Down");
+    d("MS_LEFT","Mouse Cursor Left"); d("MS_RGHT","Mouse Cursor Right");
+    d("MS_BTN1","Mouse Button 1"); d("MS_BTN2","Mouse Button 2");
+    d("MS_BTN3","Mouse Button 3"); d("MS_BTN4","Mouse Button 4");
+    d("MS_BTN5","Mouse Button 5"); d("MS_BTN6","Mouse Button 6");
+    d("MS_BTN7","Mouse Button 7"); d("MS_BTN8","Mouse Button 8");
+    d("MS_WHLU","Mouse Wheel Up"); d("MS_WHLD","Mouse Wheel Down");
+    d("MS_WHLL","Mouse Wheel Left"); d("MS_WHLR","Mouse Wheel Right");
+    d("MS_ACL0","Mouse Acceleration 0"); d("MS_ACL1","Mouse Acceleration 1");
+    d("MS_ACL2","Mouse Acceleration 2");
+    // Magic / Bootmagic
+    d("GU_ON","Enable GUI"); d("GU_OFF","Disable GUI"); d("GU_TOGG","Toggle GUI");
+    d("AG_SWAP","Swap Alt/GUI"); d("AG_NORM","Unswap Alt/GUI"); d("AG_TOGG","Toggle Alt/GUI");
+    d("CG_SWAP","Swap Ctrl/GUI"); d("CG_NORM","Unswap Ctrl/GUI"); d("CG_TOGG","Toggle Ctrl/GUI");
 }
 
 std::string descOf(uint16_t code) {

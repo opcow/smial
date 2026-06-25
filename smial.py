@@ -148,6 +148,31 @@ NAMES.update({
     "AS_ON": 0x7C13, "AS_OFF": 0x7C14, "AS_TOGG": 0x7C15,
     "QK_BOOT": 0x7C00,                       # enter DFU bootloader (e.g. combo output)
 })
+# International / JIS keys (plain HID usages; work on any board)
+NAMES.update({
+    "NUHS": 0x32, "NUBS": 0x64, "RO": 0x87, "KANA": 0x88, "JYEN": 0x89,
+    "HENK": 0x8A, "MHEN": 0x8B, "HAEN": 0x90, "HANJ": 0x91,
+})
+# Editing / application keys (plain HID; POWER 0x66 = keyboard power, not consumer PWR 0xA5)
+NAMES.update({
+    "APP": 0x65, "POWER": 0x66, "EXEC": 0x74, "HELP": 0x75, "MENU": 0x76,
+    "SLCT": 0x77, "STOP": 0x78, "AGIN": 0x79, "UNDO": 0x7A, "CUT": 0x7B,
+    "COPY": 0x7C, "PSTE": 0x7D, "FIND": 0x7E, "ERAS": 0x99,
+})
+# Mouse keys (QK_MOUSE range 0xCD-0xDF; need MOUSEKEY_ENABLE in firmware)
+NAMES.update({
+    "MS_UP": 0xCD, "MS_DOWN": 0xCE, "MS_LEFT": 0xCF, "MS_RGHT": 0xD0,
+    "MS_BTN1": 0xD1, "MS_BTN2": 0xD2, "MS_BTN3": 0xD3, "MS_BTN4": 0xD4,
+    "MS_BTN5": 0xD5, "MS_BTN6": 0xD6, "MS_BTN7": 0xD7, "MS_BTN8": 0xD8,
+    "MS_WHLU": 0xD9, "MS_WHLD": 0xDA, "MS_WHLL": 0xDB, "MS_WHLR": 0xDC,
+    "MS_ACL0": 0xDD, "MS_ACL1": 0xDE, "MS_ACL2": 0xDF,
+})
+# Magic / Bootmagic GUI/Alt/Ctrl swaps (need Bootmagic; names match keycodes.h aliases)
+NAMES.update({
+    "GU_ON": 0x7009, "GU_OFF": 0x700A, "GU_TOGG": 0x700B,
+    "AG_SWAP": 0x7014, "AG_NORM": 0x7015, "AG_TOGG": 0x7016,
+    "CG_SWAP": 0x701B, "CG_NORM": 0x701C, "CG_TOGG": 0x701D,
+})
 CODE_TO_NAME = {v: k for k, v in NAMES.items()}
 
 # QMK keycode-range bases for MT/LT/OSM/modded builder forms.
